@@ -167,7 +167,7 @@ class SeldonSettings:
             raise ValueError(
                 "config['model']['HyraxSeldon']['seldon_config'] must be set to a SELDON run "
                 "config: the hparams.yaml of a SELDON training run, or the seldon_config.yaml "
-                "seldon-convert-checkpoint writes next to converted weights."
+                "HyraxSeldon saves next to its weights."
             )
         path = Path(seldon_config).expanduser().resolve()
         if not path.is_file():

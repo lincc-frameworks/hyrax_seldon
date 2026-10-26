@@ -45,21 +45,23 @@ def seldon_config(model_config, run_config_path):
 
 
 @pytest.fixture(scope="session")
-def converted_weights(tmp_path_factory, seldon_run_dir):
-    """The synthetic run's checkpoint, converted with seldon-convert-checkpoint."""
-    from hyrax_seldon.checkpoints import convert_run_dir
-
-    return convert_run_dir(seldon_run_dir, tmp_path_factory.mktemp("converted"))
+def seldon_checkpoint(seldon_run_dir):
+    """The synthetic run's Lightning checkpoint."""
+    (checkpoint,) = (seldon_run_dir / "checkpoints").glob("*.ckpt")
+    return checkpoint
 
 
 @pytest.fixture(scope="session")
-def _hyrax_config(converted_weights):
-    from hyrax_seldon.checkpoints import hyrax_config
+def _hyrax_config(run_config_path):
+    from hyrax import Hyrax
 
-    return hyrax_config(converted_weights.parent / "seldon_config.yaml")
+    h = Hyrax(setup_logging=False)
+    h.set_config("model.name", "hyrax_seldon.models.seldon.HyraxSeldon")
+    h.set_config("model.HyraxSeldon.seldon_config", str(run_config_path))
+    return h.config
 
 
 @pytest.fixture
 def hyrax_config(_hyrax_config):
-    """A full Hyrax runtime config selecting HyraxSeldon, built from the converted run config."""
+    """A full Hyrax runtime config selecting HyraxSeldon, built from the synthetic run config."""
     return copy.deepcopy(_hyrax_config)

@@ -2,18 +2,22 @@
 
 The model is SELDON's ``SELDONEnergyClassifierDictModel``, built with SELDON's own factory
 from the run config named by ``[model.HyraxSeldon].seldon_config`` and stored as
-``self.model``. That attribute name matches the ``model.`` prefix of SELDON's Lightning
-checkpoints, so a converted checkpoint loads into ``HyraxSeldon`` key for key (see
-:mod:`hyrax_seldon.checkpoints`).
+``self.model``.
 
-Saving writes the run config next to the weights as ``seldon_config.yaml``, so a checkpoint
-keeps the settings it was trained with.
+Loading accepts a SELDON training run's Lightning checkpoint
+(``<run_dir>/checkpoints/*.ckpt``) directly. SELDON's Lightning experiment also holds the
+model as ``model``, so the checkpoint's weights load into ``HyraxSeldon`` key for key. Point
+``seldon_config`` at the same run's ``hparams.yaml``.
+
+Saving writes the run config next to the weights as ``seldon_config.yaml``, so weights saved
+by Hyrax keep the settings they were trained with.
 """
 
 import logging
 import shutil
 from pathlib import Path
 
+import ignite.distributed as idist
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
@@ -26,9 +30,6 @@ logger = logging.getLogger(__name__)
 
 #: File name of the SELDON run config written next to saved weights.
 SELDON_CONFIG_FILENAME = "seldon_config.yaml"
-
-#: The value for ``[model].name`` that selects this model.
-MODEL_NAME = "hyrax_seldon.models.seldon.HyraxSeldon"
 
 
 @hyrax_model
@@ -68,8 +69,9 @@ class HyraxSeldon(nn.Module):
             Always.
         """
         raise NotImplementedError(
-            "HyraxSeldon does not support training yet; it runs inference from converted SELDON "
-            "checkpoints. Use seldon-convert-checkpoint and the infer or infer_stream verbs."
+            "HyraxSeldon does not support training yet; it runs inference from SELDON checkpoints. "
+            "Point [infer].model_weights_file or [infer_stream].model_weights_file at a SELDON run's "
+            ".ckpt, and [model.HyraxSeldon].seldon_config at the run's hparams.yaml."
         )
 
     def decode(self, decoder_inputs, t, band_idx):
@@ -227,15 +229,32 @@ def _save(self, save_path: Path):
         shutil.copyfile(self.settings.seldon_config_path, destination)
 
 
-def _load(self, load_path: Path):
-    """Load weights, warning if they were saved with a different SELDON run config."""
-    load_path = Path(load_path)
-    _hyrax_load(self, load_path)
+def _load_lightning_checkpoint(self, checkpoint_path: Path):
+    """Load the weights from a SELDON training run's Lightning checkpoint."""
+    device = idist.device()
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    self.to(device)
+    self.load_state_dict(checkpoint["state_dict"])
 
-    saved_config = load_path.parent / SELDON_CONFIG_FILENAME
+
+def _load(self, load_path: Path):
+    """Load weights, warning if they were saved with a different SELDON run config.
+
+    A ``.ckpt`` is a SELDON training run's Lightning checkpoint, whose run config is the
+    run's ``hparams.yaml`` (``<run_dir>/checkpoints/<name>.ckpt``). Anything else is weights
+    saved by :meth:`HyraxSeldon.save`, with the run config beside them as ``seldon_config.yaml``.
+    """
+    load_path = Path(load_path)
+    if load_path.suffix == ".ckpt":
+        _load_lightning_checkpoint(self, load_path)
+        saved_config = load_path.parent.parent / "hparams.yaml"
+    else:
+        _hyrax_load(self, load_path)
+        saved_config = load_path.parent / SELDON_CONFIG_FILENAME
+
     if not saved_config.exists():
         logger.warning(
-            f"No {SELDON_CONFIG_FILENAME} next to {load_path}, so these weights cannot be checked "
+            f"No SELDON run config at {saved_config}, so the weights in {load_path} cannot be checked "
             f"against the SELDON run config in use ({self.settings.seldon_config_path})."
         )
     elif saved_config.resolve() != self.settings.seldon_config_path:

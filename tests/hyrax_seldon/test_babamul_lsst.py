@@ -223,7 +223,7 @@ fields = ["time", "flux", "flux_err", "band", "detected"]
 name = "hyrax_seldon.models.seldon.HyraxSeldon"
 
 [model.HyraxSeldon]
-seldon_config = "{weights.parent / "seldon_config.yaml"}"
+seldon_config = "{weights.parent.parent / "hparams.yaml"}"
 reconstruction_grid = {str(reconstruction_grid).lower()}
 
 [infer_stream]
@@ -262,7 +262,7 @@ EXPECTED_KEYS = {
 
 
 @pytest.mark.parametrize("reconstruction_grid", [False, True])
-def test_process_alerts_end_to_end(tmp_path, converted_weights, recorded, reconstruction_grid):
+def test_process_alerts_end_to_end(tmp_path, seldon_checkpoint, recorded, reconstruction_grid):
     """process_alerts streams Babamul LSST alerts through HyraxSeldon to the writers.
 
     Every alert gets its own result with every output key; each result's point count matches
@@ -270,7 +270,7 @@ def test_process_alerts_end_to_end(tmp_path, converted_weights, recorded, recons
     """
     from hyrax_alerts.process_alerts import process_alerts
 
-    process_alerts(config_filepath=str(_write_config(tmp_path, converted_weights, reconstruction_grid)))
+    process_alerts(config_filepath=str(_write_config(tmp_path, seldon_checkpoint, reconstruction_grid)))
 
     alerts = {alert["candid"]: alert for alert in _alerts()}
     assert sorted(int(record["object_id"]) for record in recorded) == sorted(alerts)

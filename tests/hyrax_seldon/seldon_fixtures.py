@@ -5,7 +5,7 @@
 directory the way SELDON's ``train.py`` does - the target yaml, SELDON's own data module
 computing the dataset statistics, a randomly initialized ``SELDONEnergyClassifierExperiment3``,
 a TensorBoard ``hparams.yaml`` and a Lightning ``ModelCheckpoint`` ``.ckpt`` - so that the
-converter and the model are tested against SELDON's real file formats.
+model is tested against SELDON's real file formats.
 """
 
 import os

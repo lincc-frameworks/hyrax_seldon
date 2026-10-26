@@ -1,4 +1,6 @@
+import copy
 import logging
+import shutil
 
 import numpy as np
 import pytest
@@ -6,7 +8,6 @@ import torch
 import yaml
 from seldon_fixtures import collate_light_curves, random_light_curve
 
-from hyrax_seldon.checkpoints import find_checkpoint, load_seldon_state_dict
 from hyrax_seldon.encoding import encode_batch
 from hyrax_seldon.models.seldon import SELDON_CONFIG_FILENAME, HyraxSeldon
 
@@ -24,17 +25,31 @@ DETERMINISTIC_KEYS = [
 STOCHASTIC_KEYS = ["z_sample", "class_idx", "class_emb"]
 PARAMETER_KEYS = ["global_offset", "global_amplitude", "redshift"]
 
+#: How far outputs on the runtime's device may be from SELDON's on the CPU, as a fraction of
+#: the reference's largest magnitude. CPU and GPU kernels round differently, and the encoder's
+#: ODE solve compounds that; the test asks for the same model, not bit-identical arithmetic.
+DEVICE_MARGIN = 0.02
+
 
 @pytest.fixture
-def model(hyrax_config, converted_weights):
-    """HyraxSeldon with the converted synthetic checkpoint loaded, in eval mode, on the CPU.
+def model(hyrax_config, seldon_checkpoint):
+    """HyraxSeldon with the synthetic run's checkpoint loaded, in eval mode.
 
-    Hyrax's loader moves the model to the default accelerator; these tests compare against
-    SELDON exactly, so they run on the CPU.
+    Hyrax's loader puts the model on the runtime's device (CUDA or MPS when available), so
+    these tests cover the device code paths.
     """
     model = HyraxSeldon(config=hyrax_config)
-    model.load(converted_weights)
-    return model.to("cpu").eval()
+    model.load(seldon_checkpoint)
+    return model.eval()
+
+
+def _device(model):
+    return next(model.parameters()).device
+
+
+def _checkpoint_state_dict(checkpoint_path):
+    """The Lightning checkpoint's weights, as SELDON saved them."""
+    return torch.load(checkpoint_path, map_location="cpu", weights_only=True)["state_dict"]
 
 
 def _light_curves(lengths, seed=0):
@@ -44,24 +59,98 @@ def _light_curves(lengths, seed=0):
 
 @pytest.fixture
 def batch(model):
-    """Prepared model inputs for light curves of several lengths, including a short one."""
+    """Prepared model inputs for light curves of several lengths, including a short one.
+
+    The inputs are on the model's device, as Hyrax places them.
+    """
     prepared = encode_batch(collate_light_curves(_light_curves([150, 600, 70, 12])), model.settings)
-    return {key: torch.from_numpy(value) for key, value in prepared.items()}
+    return {key: torch.from_numpy(value).to(_device(model)) for key, value in prepared.items()}
+
+
+def _cpu(batch):
+    return {key: value.cpu() for key, value in batch.items()}
 
 
 @pytest.fixture
-def seldon_model(model, seldon_run_dir):
-    """The same checkpoint loaded into a SELDON model built directly with SELDON's factory."""
-    import copy
-
+def seldon_model(model, seldon_checkpoint):
+    """The reference: the checkpoint loaded into SELDON's model built with SELDON's factory, on the CPU."""
     from TAE.models.factory import get_module
 
     params = copy.deepcopy(model.settings.model_params)
     seldon_model = get_module(params["name"], params["config"])
     for module in seldon_model.modules():
         module._compiled_call_impl = None
-    seldon_model.load_state_dict(load_seldon_state_dict(find_checkpoint(seldon_run_dir)), strict=True)
+    # SELDON's Lightning experiment holds the model as `model`.
+    state_dict = {
+        key.removeprefix("model."): value for key, value in _checkpoint_state_dict(seldon_checkpoint).items()
+    }
+    seldon_model.load_state_dict(state_dict, strict=True)
     return seldon_model.eval()
+
+
+def test_checkpoint_has_seldon_lightning_layout(seldon_checkpoint):
+    """The synthetic run's checkpoint is weights only, every key under SELDON's `model`."""
+    checkpoint = torch.load(seldon_checkpoint, map_location="cpu", weights_only=True)
+
+    assert "hyper_parameters" not in checkpoint
+    assert len(checkpoint["state_dict"]) == 295
+    assert all(key.startswith("model.") for key in checkpoint["state_dict"])
+
+
+def test_load_lightning_checkpoint(hyrax_config, seldon_checkpoint):
+    """Hyrax's load path restores a SELDON Lightning checkpoint's weights exactly."""
+    model = HyraxSeldon(config=hyrax_config)
+    model.load(seldon_checkpoint)
+
+    original = _checkpoint_state_dict(seldon_checkpoint)
+    assert model.state_dict().keys() == original.keys()
+    for key, value in model.state_dict().items():
+        assert torch.equal(value.cpu(), original[key]), key
+
+
+def _copy_run_dir(seldon_run_dir, tmp_path):
+    """Copy the synthetic run directory, and return the copy's checkpoint."""
+    run_dir = tmp_path / "run"
+    shutil.copytree(seldon_run_dir, run_dir)
+    (checkpoint,) = (run_dir / "checkpoints").glob("*.ckpt")
+    return checkpoint
+
+
+@pytest.mark.parametrize("change", ["missing", "unexpected"])
+def test_mismatched_checkpoint_rejected(hyrax_config, seldon_run_dir, tmp_path, change):
+    """A checkpoint whose weights do not match the run config's model fails to load."""
+    checkpoint_path = _copy_run_dir(seldon_run_dir, tmp_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=True)
+    if change == "missing":
+        checkpoint["state_dict"].pop(next(iter(checkpoint["state_dict"])))
+    else:
+        checkpoint["state_dict"]["extra.weight"] = torch.zeros(1)
+    torch.save(checkpoint, checkpoint_path)
+
+    with pytest.raises(RuntimeError, match="Missing key|Unexpected key"):
+        HyraxSeldon(config=hyrax_config).load(checkpoint_path)
+
+
+def test_load_checkpoint_warns_on_different_run_config(hyrax_config, seldon_run_dir, tmp_path, caplog):
+    """A checkpoint whose run's hparams.yaml differs from the run config in use warns."""
+    checkpoint_path = _copy_run_dir(seldon_run_dir, tmp_path)
+    hparams = checkpoint_path.parent.parent / "hparams.yaml"
+    config = yaml.safe_load(hparams.read_text())
+    config["dataset"]["config"]["flux_stats"]["max"] *= 2
+    hparams.write_text(yaml.safe_dump(config))
+
+    with caplog.at_level(logging.WARNING, logger="hyrax_seldon.models.seldon"):
+        HyraxSeldon(config=hyrax_config).load(checkpoint_path)
+
+    assert str(hparams) in caplog.text
+
+
+def test_load_checkpoint_does_not_warn_on_its_own_run_config(hyrax_config, seldon_checkpoint, caplog):
+    """Loading a run's checkpoint with that run's hparams.yaml does not warn."""
+    with caplog.at_level(logging.WARNING, logger="hyrax_seldon.models.seldon"):
+        HyraxSeldon(config=hyrax_config).load(seldon_checkpoint)
+
+    assert "run config" not in caplog.text
 
 
 def _call_seldon(seldon_model, batch):
@@ -74,20 +163,32 @@ def _call_seldon(seldon_model, batch):
     )
 
 
+def _assert_within_margin(ours, reference, name):
+    """Assert ``ours`` is within DEVICE_MARGIN of ``reference``, relative to its largest magnitude."""
+    difference = (ours.cpu() - reference).abs().max()
+    scale = reference.abs().max()
+    assert difference <= DEVICE_MARGIN * scale, f"{name}: max difference {difference} vs scale {scale}"
+
+
 def test_infer_batch_matches_seldon(model, seldon_model, batch):
-    """Every deterministic output equals SELDON's model called directly on the same batch."""
+    """Every deterministic output matches SELDON's model called directly on the CPU."""
     with torch.no_grad():
         ours = model.infer_batch(batch)
-        reference = _call_seldon(seldon_model, batch)
+        reference = _call_seldon(seldon_model, _cpu(batch))
 
     for key in DETERMINISTIC_KEYS:
-        assert torch.equal(ours[key], reference[key]), key
+        _assert_within_margin(ours[key], reference[key], key)
     for key in PARAMETER_KEYS:
-        assert torch.equal(ours[f"parameters_{key}"], reference["parameters"][key]), key
+        _assert_within_margin(ours[f"parameters_{key}"], reference["parameters"][key], key)
 
 
 def test_stochastic_outputs_match_seldon_under_the_same_seed(model, seldon_model, batch):
-    """z_sample, class_idx and class_emb are passed through as SELDON draws them."""
+    """z_sample, class_idx and class_emb are passed through as SELDON draws them.
+
+    Random draws from one seed differ between devices, so the reference runs on the model's
+    device here.
+    """
+    seldon_model = copy.deepcopy(seldon_model).to(_device(model))
     with torch.no_grad():
         torch.manual_seed(7)
         ours = model.infer_batch(batch)
@@ -166,7 +267,7 @@ def test_save_load_round_trip(model, hyrax_config, batch, tmp_path):
 
     reloaded = HyraxSeldon(config=hyrax_config)
     reloaded.load(tmp_path / "weights.pth")
-    reloaded.to("cpu").eval()
+    reloaded.eval()
 
     with torch.no_grad():
         first = model.infer_batch(batch)
@@ -227,14 +328,14 @@ def test_compile_neutralized_unless_requested(hyrax_config):
 
 
 @pytest.fixture
-def grid_model(hyrax_config, converted_weights):
+def grid_model(hyrax_config, seldon_checkpoint):
     """HyraxSeldon with a 3-point reconstruction grid at -10, 0 and +10 days."""
     hyrax_config["model"]["HyraxSeldon"].update(
         reconstruction_grid=True, grid_points=3, grid_horizon=[-10.0, 10.0]
     )
     model = HyraxSeldon(config=hyrax_config)
-    model.load(converted_weights)
-    return model.to("cpu").eval()
+    model.load(seldon_checkpoint)
+    return model.eval()
 
 
 def test_reconstruction_grid_shapes(grid_model, batch):
@@ -270,7 +371,7 @@ def test_reconstruction_grid_values(grid_model, batch):
 
     # +10 days, in the r band, through decode() directly.
     t = batch["time_full"][:, -1:, :] + 10.0 / settings.t_max
-    r_band = torch.full((4, 1, 1), settings.band_to_index("r"))
+    r_band = torch.full((4, 1, 1), settings.band_to_index("r"), device=t.device)
     with torch.no_grad():
         reconstructed, _ = grid_model.decode(out["decoder_inputs"], t, r_band)
     torch.testing.assert_close(out["grid_reconstructed"][:, LSST_BANDS.index("r"), 2], reconstructed[:, 0, 0])

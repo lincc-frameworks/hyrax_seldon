@@ -118,7 +118,7 @@ batch_size = 6
 name = "hyrax_seldon.models.seldon.HyraxSeldon"
 
 [model.HyraxSeldon]
-seldon_config = "{weights.parent / "seldon_config.yaml"}"
+seldon_config = "{weights.parent.parent / "hparams.yaml"}"
 reconstruction_grid = {str(reconstruction_grid).lower()}
 
 [infer]
@@ -157,12 +157,12 @@ GRID_KEYS = {"grid_time", "grid_reconstructed", "grid_error"}
 
 
 @pytest.mark.parametrize("reconstruction_grid", [False, True])
-def test_infer_end_to_end(tmp_path, elasticc_parquet, converted_weights, reconstruction_grid):
+def test_infer_end_to_end(tmp_path, elasticc_parquet, seldon_checkpoint, reconstruction_grid):
     """h.infer() over ELAsTiCC parquet writes every output key, one row per object."""
     from hyrax import Hyrax
 
     h = Hyrax(
-        config_file=_write_infer_config(tmp_path, elasticc_parquet, converted_weights, reconstruction_grid)
+        config_file=_write_infer_config(tmp_path, elasticc_parquet, seldon_checkpoint, reconstruction_grid)
     )
     results = h.infer()
 

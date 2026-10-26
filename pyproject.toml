@@ -33,9 +33,6 @@ dependencies = [
 [project.urls]
 "Source Code" = "https://github.com/lincc-frameworks/hyrax_seldon"
 
-[project.scripts]
-seldon-convert-checkpoint = "hyrax_seldon.checkpoints:main"
-
 # On a mac, install optional dependencies with `pip install '.[dev]'` (include the single quotes)
 [project.optional-dependencies]
 dev = [

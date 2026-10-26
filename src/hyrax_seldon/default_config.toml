@@ -1,6 +1,6 @@
 [model.HyraxSeldon]
 # Path to a SELDON run config: the hparams.yaml of a SELDON training run, or the
-# seldon_config.yaml that seldon-convert-checkpoint writes next to converted weights.
+# seldon_config.yaml that HyraxSeldon saves next to its weights.
 # It supplies the architecture, the preprocessing settings and statistics, and the
 # class map. REQUIRED.
 seldon_config = false
