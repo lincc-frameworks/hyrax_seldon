@@ -1,0 +1,4 @@
+# Downloaded and generated data stays out of git; only the scripts here are tracked.
+*
+!.gitignore
+!*.py
