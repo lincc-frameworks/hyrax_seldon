@@ -1,0 +1,38 @@
+[model.HyraxSeldon]
+# Path to a SELDON run config: the hparams.yaml of a SELDON training run, or the
+# seldon_config.yaml that seldon-convert-checkpoint writes next to converted weights.
+# It supplies the architecture, the preprocessing settings and statistics, and the
+# class map. REQUIRED.
+seldon_config = false
+
+# Keep the torch compile() calls SELDON makes in its model constructors.
+compile = false
+
+# Per-point fields prepare_inputs reads from the "data" group of each batch. A field
+# "<name>_mask" alongside a field marks which entries are real points rather than padding.
+time_field = "time"          # MJD
+flux_field = "flux"          # ELAsTiCC FLUXCAL scale (zero point 27.5)
+flux_err_field = "flux_err"
+band_field = "band"          # band name, e.g. "u".."y"
+detected_field = "detected"  # true for detections, false for forced photometry
+
+# Also evaluate the decoder on a fixed time grid for each of the six LSST bands.
+reconstruction_grid = false
+# Number of grid times.
+grid_points = 64
+# [start, end] of the grid in days, relative to the last observation.
+grid_horizon = [-50.0, 50.0]
+
+[data_set.ElasticcParquetDataset]
+# Extra keyword arguments passed directly to pandas.read_parquet.
+[data_set.ElasticcParquetDataset.read_kwargs]
+
+# hyrax_alerts settings that BabamulLsstConsumer and process_alerts read. hyrax_alerts' own
+# defaults are only merged when a config names one of its classes, so they are repeated here.
+[hyrax_alerts.consumer]
+# Stop process_alerts after this many alerts; false means no limit.
+alert_limit = false
+
+[hyrax_alerts.consumer.BabamulConsumer]
+# Keep alerts as raw dicts.
+raw_alert = false
