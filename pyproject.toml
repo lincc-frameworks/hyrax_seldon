@@ -26,8 +26,8 @@ dependencies = [
     "omegaconf",
     "pandas",
     "pyarrow",
-    # SELDON's patch branch for hyrax_seldon. SELDON declares no torch/lightning dependency.
-    "seldon_core @ git+https://github.com/skai-institute/seldon@hyrax-seldon-patches",
+    # SELDON v1.2.0. SELDON declares no torch/lightning dependency.
+    "seldon_core @ git+https://github.com/skai-institute/seldon@v1.2.0",
 ]
 
 [project.urls]
