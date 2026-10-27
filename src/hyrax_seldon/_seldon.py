@@ -11,15 +11,22 @@ Importing SELDON has side effects that are contained here:
   ``nn.Module.compile()`` in their constructors. :func:`build_model` undoes that unless
   compilation is requested.
 
-SELDON's data modules (``multiprocessing.Manager``, a global ``np.random.seed``) are never
-used at runtime; preprocessing is assembled in :mod:`hyrax_seldon.encoding` from the small
-transform and mask classes re-exported here.
+- ``LightCurvePreprocessor``'s constructor reseeds NumPy's global random number generator
+  (``np.random.seed(42)``) and prints. :func:`preprocess` restores the generator's state
+  afterwards and captures the print.
+
+SELDON's data modules (``FlexibleLightCurveDataLoader``, which starts a
+``multiprocessing.Manager``) are never used at runtime.
 """
 
+import contextlib
 import copy
 import importlib
+import io
 import sys
 from pathlib import Path
+
+import numpy as np
 
 #: The SELDON model class this port supports.
 SUPPORTED_MODEL = "SELDONEnergyClassifierDictModel"
@@ -150,25 +157,65 @@ def build_model(model_params: dict, compile: bool = False):
     return model
 
 
-def flux_transform(max_flux: float):
-    """Return SELDON's flux transform: semilog, then scaling by the semilog of ``max_flux``.
+#: Class name given to every light curve handed to SELDON's preprocessor. It requires a class
+#: name and weight per light curve, but they only feed its training bookkeeping.
+PLACEHOLDER_CLASS = "Unknown"
+
+
+def preprocess(
+    light_curves, band_indices, detection_flags, flux_stats, band_weights, **options
+) -> dict[str, np.ndarray]:
+    """Run SELDON's ``LightCurvePreprocessor`` and ``enhanced_collate_fn`` over a batch.
+
+    The preprocessor is built without augmentations and without resampling noise, so it
+    selects the earliest ``max_points`` points for the encoder (``FullSample``). Light curves
+    longer than ``max_length`` get a random window from SELDON, so trim them first.
 
     Parameters
     ----------
-    max_flux : float
-        ``flux_stats.max`` from the run config, in the same units as the flux.
+    light_curves : list[numpy.ndarray]
+        One ``(n, 3)`` float32 array per light curve: time (MJD), flux, flux error, with flux
+        already divided by the run's ``zero_point_flux``.
+    band_indices : list[numpy.ndarray]
+        One ``(n,)`` int64 array of SELDON band indices per light curve.
+    detection_flags : list[numpy.ndarray]
+        One ``(n,)`` bool array per light curve.
+    flux_stats : dict
+        The run config's ``dataset.config.flux_stats``.
+    band_weights : dict
+        The run config's ``dataset.config.band_weights``.
+    **options
+        ``LightCurvePreprocessor`` settings from the run config: ``flux_normalization``,
+        ``time_normalization``, ``min_points``, ``max_points``, ``max_length``, ``t_offset``.
 
     Returns
     -------
-    TAE.datasets.preprocessing.TransformPipeline
-        ``transform(flux, error)`` returns the normalized ``(flux, error)``.
+    dict[str, numpy.ndarray]
+        The tensors of ``enhanced_collate_fn``'s batch, as numpy arrays.
     """
-    preprocessing = _import("TAE.datasets.preprocessing")
-    semilog = preprocessing.SemilogTransform()
-    scale = preprocessing.MaxTransform(max_value=semilog.transform(max_flux))
-    return preprocessing.TransformPipeline(semilog, scale)
+    preprocessor_module = _import("TAE.datasets.lightcurve_preprocessor")
+    collate = _import("TAE.datasets.lightcurve_dataset").enhanced_collate_fn
+    import torch
 
+    meta_data = {"detection_flag": [flags.astype(np.float32)[:, None] for flags in detection_flags]}
 
-def padding_mask(length: int):
-    """Return SELDON's ``PaddingMask`` for arrays padded to ``length``."""
-    return _import("TAE.datasets.masking").PaddingMask(length)
+    rng_state = np.random.get_state()
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            preprocessor = preprocessor_module.LightCurvePreprocessor(
+                light_curves=light_curves,
+                class_names=[PLACEHOLDER_CLASS] * len(light_curves),
+                class_weights={PLACEHOLDER_CLASS: 1.0},
+                band_indices=band_indices,
+                band_weights=band_weights,
+                flux_stats=flux_stats,
+                meta_data=meta_data,
+                augmentations=None,
+                resample=False,
+                **options,
+            )
+        batch = collate([preprocessor[i] for i in range(len(light_curves))])
+    finally:
+        np.random.set_state(rng_state)
+
+    return {key: value.numpy() for key, value in batch.items() if isinstance(value, torch.Tensor)}

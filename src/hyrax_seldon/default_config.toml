@@ -20,7 +20,8 @@ detected_field = "detected"  # true for detections, false for forced photometry
 reconstruction_grid = false
 # Number of grid times.
 grid_points = 64
-# [start, end] of the grid in days, relative to the last observation.
+# [start, end] of the grid in days, relative to the last observation the model sees
+# (the last of the earliest max_length points).
 grid_horizon = [-50.0, 50.0]
 
 [data_set.ElasticcParquetDataset]

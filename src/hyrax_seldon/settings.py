@@ -109,6 +109,7 @@ class SeldonSettings:
     max_length: int
     include_non_detections: bool
     band_index: dict[str, int] = field(repr=False)
+    band_weights: dict[int, float] = field(repr=False)
     class_map: dict[str, int] = field(repr=False)
 
     @property
@@ -195,6 +196,9 @@ class SeldonSettings:
         class_map = dataset_config.get("class_map")
         if not isinstance(class_map, dict):
             raise ValueError(f"{path} has no dataset.config.class_map, so it is not a SELDON run config.")
+        band_weights = dataset_config.get("band_weights")
+        if not isinstance(band_weights, dict):
+            raise ValueError(f"{path} has no dataset.config.band_weights, so it is not a SELDON run config.")
 
         for key, (required, default) in _REQUIRED_DATASET_VALUES.items():
             value = dataset_config.get(key, default)
@@ -238,5 +242,6 @@ class SeldonSettings:
             max_length=_positive_int("dataset.config.max_length", dataset_config.get("max_length", 400)),
             include_non_detections=bool(dataset_config.get("include_non_detections", False)),
             band_index=band_index_map(dataset_config),
+            band_weights={int(index): float(weight) for index, weight in band_weights.items()},
             class_map={str(name): int(index) for name, index in class_map.items()},
         )

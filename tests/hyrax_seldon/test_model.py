@@ -52,18 +52,21 @@ def _checkpoint_state_dict(checkpoint_path):
     return torch.load(checkpoint_path, map_location="cpu", weights_only=True)["state_dict"]
 
 
-def _light_curves(lengths, seed=0):
+def _light_curves(lengths, seed=0, detected_fractions=None):
     rng = np.random.default_rng(seed)
-    return [random_light_curve(rng, n) for n in lengths]
+    detected_fractions = detected_fractions or [0.9] * len(lengths)
+    pairs = zip(lengths, detected_fractions, strict=True)
+    return [random_light_curve(rng, n, fraction) for n, fraction in pairs]
 
 
 @pytest.fixture
 def batch(model):
-    """Prepared model inputs for light curves of several lengths, including a short one.
+    """Prepared model inputs for light curves of several lengths, the last with few detections.
 
     The inputs are on the model's device, as Hyrax places them.
     """
-    prepared = encode_batch(collate_light_curves(_light_curves([150, 600, 70, 12])), model.settings)
+    light_curves = _light_curves([150, 600, 70, 40], detected_fractions=[0.9, 0.9, 0.9, 0.3])
+    prepared = encode_batch(collate_light_curves(light_curves), model.settings)
     return {key: torch.from_numpy(value).to(_device(model)) for key, value in prepared.items()}
 
 
@@ -245,7 +248,7 @@ def test_pad_mask_full_passed_through(model, batch):
         out = model.infer_batch(batch)
 
     assert torch.equal(out["pad_mask_full"], batch["pad_mask_full"])
-    assert out["pad_mask_full"].sum(dim=1).tolist() == [150, 512, 70, 12]
+    assert out["pad_mask_full"].sum(dim=1).tolist() == [150, 512, 70, 40]
 
 
 def test_decode_reproduces_forward(model, batch):
@@ -310,7 +313,7 @@ def test_prepare_inputs_uses_run_context(hyrax_config):
     """prepare_inputs reads the config from Hyrax's run context, as verbs provide it."""
     from hyrax.context import run_context
 
-    raw = collate_light_curves(_light_curves([20]))
+    raw = collate_light_curves(_light_curves([40]))
     with run_context("infer", config=hyrax_config):
         prepared = HyraxSeldon.prepare_inputs({"data": raw, "object_id": np.array(["a"])})
 

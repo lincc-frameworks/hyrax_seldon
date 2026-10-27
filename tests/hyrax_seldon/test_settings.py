@@ -129,3 +129,14 @@ def test_bad_grid_horizon_rejected(seldon_config):
     seldon_config["model"]["HyraxSeldon"]["grid_horizon"] = [10.0, -10.0]
     with pytest.raises(ValueError, match="grid_horizon"):
         SeldonSettings.from_config(seldon_config)
+
+
+def test_run_config_without_band_weights_rejected(tmp_path, run_config_path, model_config):
+    """SELDON's preprocessor needs the run's band weights."""
+
+    def edit(config):
+        del config["dataset"]["config"]["band_weights"]
+
+    model_config["seldon_config"] = str(_write_run_config(tmp_path, run_config_path, edit))
+    with pytest.raises(ValueError, match="band_weights"):
+        SeldonSettings.from_config({"model": {"HyraxSeldon": model_config}})

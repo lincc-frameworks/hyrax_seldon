@@ -71,7 +71,7 @@ def _alerts():
         make_light_curve_alert(rng, 1002, "lsst-obj-2", n_visits=120),
         make_light_curve_alert(rng, 1003, "lsst-obj-3", n_visits=50, empty_forced=True),
         make_light_curve_alert(rng, 1004, "lsst-obj-4", n_visits=700),
-        make_light_curve_alert(rng, 1005, "lsst-obj-5", n_visits=30, n_null=0),
+        make_light_curve_alert(rng, 1005, "lsst-obj-5", n_visits=40, n_null=0),
     ]
 
 

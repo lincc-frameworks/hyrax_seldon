@@ -117,7 +117,7 @@ class HyraxSeldon(nn.Module):
         device = decoder_inputs.device
 
         offsets = torch.linspace(*settings.grid_horizon, n_grid, device=device, dtype=time_full.dtype)
-        # time_full is edge-padded, so its last entry is the most recent observation.
+        # time_full is edge-padded, so its last entry is its latest observation.
         t_last = time_full[:, -1, 0]
         grid_t = t_last[:, None, None] + offsets[None, None, :] / settings.t_max
         grid_t = grid_t.expand(n_batch, n_bands, n_grid).reshape(n_batch, n_bands * n_grid, 1)
@@ -152,12 +152,13 @@ class HyraxSeldon(nn.Module):
             predicts the class from a posterior sample even in eval mode. Also:
 
             - ``pad_mask_full`` ``(B, max_length)``: which entries of the per-point outputs
-              (``reconstructed``, ``error``) are real points. Those are the most recent
+              (``reconstructed``, ``error``) are real points. Those are the earliest
               ``max_length`` valid points, in time order.
-            - ``short_lightcurve`` ``(B,)``: the encoder saw fewer than ``min_points``
-              detections, which SELDON never trains on.
+            - ``short_lightcurve`` ``(B,)``: the encoder's points hold fewer than
+              ``min_points`` detections. SELDON's loader excludes such light curves from
+              training.
             - with ``reconstruction_grid`` on: ``grid_time`` ``(B, grid_points)`` in days
-              relative to the last observation, and ``grid_reconstructed`` /
+              relative to the last observation in ``pad_mask_full``, and ``grid_reconstructed`` /
               ``grid_error`` ``(B, 6, grid_points)`` for the bands u, g, r, i, z, y.
         """
         out = self.forward(

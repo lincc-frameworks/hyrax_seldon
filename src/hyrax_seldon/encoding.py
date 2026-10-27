@@ -2,24 +2,20 @@
 
 This is the implementation of :meth:`hyrax_seldon.models.seldon.HyraxSeldon.prepare_inputs`.
 Datasets emit raw values (MJD, flux on the ELAsTiCC ``FLUXCAL`` scale, flux error, band
-name, detection flag); everything the model does to them is configured by the SELDON run
-config, through :class:`~hyrax_seldon.settings.SeldonSettings`.
+name, detection flag); the preprocessing itself is SELDON's own ``LightCurvePreprocessor``
+and ``enhanced_collate_fn``, run per batch with the settings and statistics of the run config
+(see :func:`hyrax_seldon._seldon.preprocess`), as SELDON's
+``SELDON_Data_Generator_forecaster.py`` does for new data.
 
-It reproduces SELDON's inference-relevant preprocessing chain
-(``TAE/datasets/lightcurve_dataloader2.py``, ``lightcurve_preprocessor.py``) with
-deterministic point selection:
+Before handing light curves to SELDON this module does what SELDON's parquet loader does:
+it keeps finite points (and only detections, if the run excluded non-detections), divides
+flux and error by ``zero_point_flux``, and stores values as float32. SELDON's preprocessor
+is then run without augmentations or resampling noise, so the encoder sees the earliest
+``max_points`` points. SELDON would pick a random ``max_length`` window from a longer light
+curve; here it gets the earliest ``max_length`` points instead.
 
-1. Keep finite points (and only detections, if the run excluded non-detections); divide
-   flux and error by ``zero_point_flux``; sort by time.
-2. Keep the most recent ``max_length`` points for the full arrays, and the most recent
-   ``max_points`` of those for the encoder.
-3. Flux: ``sign(f) * log10(1 + |f|)``, then divide by the same transform of
-   ``flux_stats.max`` and subtract 0.5, with errors propagated (SELDON's own transforms).
-4. Time: ``(t - t0) / t_max + t_offset``, with ``t0`` the earliest encoder point.
-5. Pad: values are edge-padded and band indices zero-padded, with boolean padding masks,
-   exactly as SELDON pads.
-
-There is no random window, resampling noise or augmentation.
+SELDON cannot encode a light curve with fewer than ``min_points`` points, and neither can
+this module: such a batch raises.
 """
 
 import numpy as np
@@ -45,7 +41,7 @@ def prepare_inputs(data_dict: dict, config: dict) -> dict[str, np.ndarray]:
     Returns
     -------
     dict[str, numpy.ndarray]
-        See :func:`encode_batch`.
+        See :func:`encode_light_curves`.
     """
     if DATA_GROUP not in data_dict:
         raise RuntimeError(
@@ -105,71 +101,85 @@ def _band_indices(band: np.ndarray, settings: SeldonSettings) -> np.ndarray:
     return lookup[inverse].reshape(band.shape)
 
 
-def _edge_pad(values: np.ndarray, length: int) -> np.ndarray:
-    """Pad the first axis to ``length`` by repeating the last row, as SELDON does."""
-    if len(values) == 0:
-        return np.zeros((length, *values.shape[1:]), dtype=values.dtype)
-    widths = [(0, length - len(values))] + [(0, 0)] * (values.ndim - 1)
-    return np.pad(values, widths, mode="edge")
-
-
-def encode_light_curve(time, flux, flux_err, band_idx, detected, settings: SeldonSettings, transform=None):
-    """Encode one light curve of valid points into SELDON's model inputs.
+def encode_light_curves(light_curves, settings: SeldonSettings) -> dict[str, np.ndarray]:
+    """Encode light curves of valid points into SELDON's model inputs.
 
     Parameters
     ----------
-    time, flux, flux_err : numpy.ndarray
-        Per-point MJD, flux and flux error, in any order. Flux is on the scale SELDON
-        divides by ``zero_point_flux``.
-    band_idx : numpy.ndarray
-        Per-point SELDON band index.
-    detected : numpy.ndarray
-        Per-point detection flag.
+    light_curves : list[tuple]
+        One ``(time, flux, flux_err, band_idx, detected)`` tuple of per-point arrays per light
+        curve, in any order: MJD, flux and flux error on the scale SELDON divides by
+        ``zero_point_flux``, SELDON band index, and detection flag.
     settings : SeldonSettings
         Settings from the run config.
-    transform : optional
-        SELDON's flux transform for ``settings.flux_max``; built if not given.
 
     Returns
     -------
     dict[str, numpy.ndarray]
-        One row of the arrays :func:`encode_batch` returns.
+        With ``P = max_points`` and ``L = max_length`` from the run config:
+
+        - ``x_input`` ``(B, P, 4)`` float32: time, flux, flux error, detection flag of the
+          earliest ``P`` points (the encoder input)
+        - ``band_idx`` ``(B, P, 1)`` int64, ``pad_mask_part`` ``(B, P)`` bool
+        - ``time_full`` ``(B, L, 1)`` float32: times of the earliest ``L`` points (where the
+          decoder is evaluated)
+        - ``band_idx_full`` ``(B, L, 1)`` int64, ``pad_mask_full`` ``(B, L)`` bool
+        - ``n_points`` ``(B,)`` int64: valid points in each light curve, before trimming
+
+    Raises
+    ------
+    ValueError
+        If a light curve has fewer than ``min_points`` points; SELDON cannot encode it.
     """
-    if transform is None:
-        transform = _seldon.flux_transform(settings.flux_max)
+    n_points = np.array([len(light_curve[0]) for light_curve in light_curves], dtype=np.int64)
+    too_short = np.flatnonzero(n_points < settings.min_points)
+    if len(too_short):
+        raise ValueError(
+            f"Light curves at batch rows {too_short.tolist()} have {n_points[too_short].tolist()} "
+            f"points, fewer than the run config's min_points={settings.min_points}; SELDON cannot "
+            "encode them."
+        )
 
-    max_points, max_length = settings.max_points, settings.max_length
+    arrays, band_indices, detection_flags = [], [], []
+    for time, flux, flux_err, band_idx, detected in light_curves:
+        # SELDON picks a random window from longer light curves; keep the earliest instead.
+        keep = slice(None)
+        if len(time) > settings.max_length:
+            keep = np.argsort(time, kind="stable")[: settings.max_length]
+        arrays.append(
+            np.column_stack(
+                [
+                    np.asarray(time)[keep],
+                    np.asarray(flux)[keep] / settings.zero_point_flux,
+                    np.asarray(flux_err)[keep] / settings.zero_point_flux,
+                ]
+            ).astype(np.float32)
+        )
+        band_indices.append(np.asarray(band_idx, dtype=np.int64)[keep])
+        detection_flags.append(np.asarray(detected, dtype=bool)[keep])
 
-    n_points = len(time)
-    order = np.argsort(time, kind="stable")[-max_length:]
-    time = np.asarray(time, dtype=np.float64)[order]
-    flux = np.asarray(flux, dtype=np.float64)[order] / settings.zero_point_flux
-    flux_err = np.asarray(flux_err, dtype=np.float64)[order] / settings.zero_point_flux
-    band_idx = np.asarray(band_idx, dtype=np.int64)[order]
-    detected = np.asarray(detected, dtype=bool)[order]
-
-    n_full = len(time)
-    n_part = min(n_full, max_points)
-
-    if n_full:
-        flux, flux_err = transform.transform(flux, flux_err)
-        t0 = time[n_full - n_part]
-        time = (time - t0) / settings.t_max + settings.t_offset
-
-    light_curve = np.stack([time, flux, flux_err, detected.astype(np.float64)], axis=1)
-    part = slice(n_full - n_part, n_full)
-
-    pad_mask_full = _seldon.padding_mask(max_length).transform(time)
-    pad_mask_part = _seldon.padding_mask(max_points).transform(time[part])
-
+    dataset_config = settings.run_config["dataset"]["config"]
+    batch = _seldon.preprocess(
+        arrays,
+        band_indices,
+        detection_flags,
+        flux_stats=dataset_config["flux_stats"],
+        band_weights=settings.band_weights,
+        flux_normalization=dataset_config.get("flux_normalization", "minmax"),
+        time_normalization=dataset_config.get("time_normalization", "std"),
+        min_points=settings.min_points,
+        max_points=settings.max_points,
+        max_length=settings.max_length,
+        t_offset=settings.t_offset,
+    )
     return {
-        "x_input": _edge_pad(light_curve[part], max_points).astype(np.float32),
-        "band_idx": np.pad(band_idx[part], (0, max_points - n_part))[:, None],
-        "pad_mask_part": pad_mask_part,
-        "time_full": _edge_pad(time, max_length)[:, None].astype(np.float32),
-        "band_idx_full": np.pad(band_idx, (0, max_length - n_full))[:, None],
-        "pad_mask_full": pad_mask_full,
-        "n_points": np.int64(n_points),
+        "x_input": batch["x_input"],
+        "band_idx": batch["band_idx"],
+        "pad_mask_part": batch["pad_mask_part"],
+        "time_full": batch["time_full"],
+        "band_idx_full": batch["band_idx_full"],
+        "pad_mask_full": batch["pad_mask_full"],
+        "n_points": n_points,
     }
 
 
@@ -186,32 +196,14 @@ def encode_batch(data: dict, settings: SeldonSettings) -> dict[str, np.ndarray]:
     Returns
     -------
     dict[str, numpy.ndarray]
-        With ``P = max_points`` and ``L = max_length`` from the run config:
-
-        - ``x_input`` ``(B, P, 4)`` float32: time, flux, flux error, detection flag of the
-          most recent ``P`` points (the encoder input)
-        - ``band_idx`` ``(B, P, 1)`` int64, ``pad_mask_part`` ``(B, P)`` bool
-        - ``time_full`` ``(B, L, 1)`` float32: times of the most recent ``L`` points (where
-          the decoder is evaluated)
-        - ``band_idx_full`` ``(B, L, 1)`` int64, ``pad_mask_full`` ``(B, L)`` bool
-        - ``n_points`` ``(B,)`` int64: valid points in each light curve, before trimming
+        See :func:`encode_light_curves`.
     """
     time, flux, flux_err, band, detected, valid = _select_columns(data, settings)
 
     band_idx = np.zeros(band.shape, dtype=np.int64)
     band_idx[valid] = _band_indices(band[valid], settings)
 
-    transform = _seldon.flux_transform(settings.flux_max)
-    rows = [
-        encode_light_curve(
-            time[i][valid[i]],
-            flux[i][valid[i]],
-            flux_err[i][valid[i]],
-            band_idx[i][valid[i]],
-            detected[i][valid[i]],
-            settings,
-            transform,
-        )
-        for i in range(len(time))
-    ]
-    return {key: np.stack([row[key] for row in rows]) for key in rows[0]}
+    columns = (time, flux, flux_err, band_idx, detected)
+    return encode_light_curves(
+        [tuple(column[i][valid[i]] for column in columns) for i in range(len(time))], settings
+    )
