@@ -59,7 +59,7 @@ def _data_module(path: str, mtime_ns: int):
 
 
 def _number(key: str, value) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise NotSupportedError(key, value, "A number is required.")
     return float(value)
 
@@ -187,7 +187,7 @@ class SeldonSettings:
 
         grid_horizon = model_config["grid_horizon"]
         if (
-            not isinstance(grid_horizon, (list, tuple))
+            not isinstance(grid_horizon, list | tuple)
             or len(grid_horizon) != 2
             or not grid_horizon[0] < grid_horizon[1]
         ):

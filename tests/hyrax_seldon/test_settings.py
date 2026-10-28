@@ -1,9 +1,8 @@
 import pytest
 import yaml
-from seldon_fixtures import TARGET_CONFIG
-
 from hyrax_seldon import _seldon
 from hyrax_seldon.settings import LSST_BANDS, NotSupportedError, SeldonSettings
+from seldon_fixtures import TARGET_CONFIG
 
 
 def _write_run_config(tmp_path, run_config_path, edit):

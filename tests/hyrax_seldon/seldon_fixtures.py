@@ -144,7 +144,6 @@ def prepare_inputs(batch, config):
     ``config`` is installed in Hyrax's run context, where ``prepare_inputs`` reads it.
     """
     from hyrax.context import run_context
-
     from hyrax_seldon.models.seldon import HyraxSeldon
 
     with run_context("infer", config=config):

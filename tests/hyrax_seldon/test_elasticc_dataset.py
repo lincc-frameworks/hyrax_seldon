@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 import pytest
-from seldon_fixtures import prepare_inputs
-
 from hyrax_seldon.collate import collate_light_curve_field
 from hyrax_seldon.datasets.elasticc_parquet import ElasticcParquetDataset
 from hyrax_seldon.settings import SeldonSettings
+from seldon_fixtures import prepare_inputs
 
 FIELDS = ["time", "flux", "flux_err", "band", "photflag"]
 COLUMNS = {"time": "MJD", "flux": "FLUXCAL", "flux_err": "FLUXCALERR", "band": "BAND", "photflag": "PHOTFLAG"}

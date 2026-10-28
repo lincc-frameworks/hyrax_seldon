@@ -11,7 +11,6 @@ from babamul_fixtures import (
     make_light_curve_alert,
 )
 from hyrax_alerts.writers.base_writer import HyraxAlertsBaseWriter
-
 from hyrax_seldon.consumers.babamul_lsst import (
     DETECTION_PHOTFLAG,
     NJY_TO_FLUXCAL,

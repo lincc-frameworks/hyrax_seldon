@@ -6,9 +6,8 @@ import numpy as np
 import pytest
 import torch
 import yaml
-from seldon_fixtures import collate_light_curves, prepare_inputs, random_light_curve
-
 from hyrax_seldon.models.seldon import SELDON_CONFIG_FILENAME, HyraxSeldon
+from seldon_fixtures import collate_light_curves, prepare_inputs, random_light_curve
 
 DETERMINISTIC_KEYS = [
     "reconstructed",

@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 import torch
+from hyrax_seldon.models.seldon import HyraxSeldon
+from hyrax_seldon.settings import SeldonSettings
 from seldon_fixtures import (
     DETECTION_FLAG,
     FIRST_DETECTION_FLAG,
@@ -9,9 +11,6 @@ from seldon_fixtures import (
     prepare_inputs,
     random_light_curve,
 )
-
-from hyrax_seldon.models.seldon import HyraxSeldon
-from hyrax_seldon.settings import SeldonSettings
 
 
 @pytest.fixture

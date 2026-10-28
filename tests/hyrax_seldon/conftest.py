@@ -2,10 +2,9 @@ import copy
 import tomllib
 from pathlib import Path
 
+import hyrax_seldon
 import pytest
 from seldon_fixtures import make_elasticc_parquet, make_seldon_run_dir
-
-import hyrax_seldon
 
 DEFAULT_CONFIG = Path(hyrax_seldon.__file__).parent / "default_config.toml"
 
