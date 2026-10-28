@@ -17,6 +17,9 @@ MJD_OFFSET = 2400000.5
 #: nJy (AB zero point 31.4) to ELAsTiCC FLUXCAL (zero point 27.5).
 NJY_TO_FLUXCAL = 10 ** (-0.4 * (31.4 - 27.5))
 
+#: The ELAsTiCC ``PHOTFLAG`` bit SELDON reads as a detection.
+DETECTION_PHOTFLAG = 4096
+
 
 def merge_photometry(alert: dict) -> dict[str, np.ndarray]:
     """Merge an alert's detections and forced photometry into one light curve.
@@ -64,10 +67,10 @@ class BabamulLsstConsumer(LightCurveCollationMixin, BabamulConsumer):
 
     Fields: ``candid`` (the primary id), ``objectId``, and per point ``time`` (MJD),
     ``flux`` and ``flux_err`` (nJy converted to the ELAsTiCC ``FLUXCAL`` scale), ``band``
-    (``u``..``y``) and ``detected`` (true for DIA detections, false for forced-only
-    points). See :func:`merge_photometry` for how the light curve is assembled. The
-    per-point fields collate padded to the longest light curve in the batch, each with a
-    ``<field>_mask``.
+    (``u``..``y``) and ``photflag`` (ELAsTiCC ``PHOTFLAG``: :data:`DETECTION_PHOTFLAG` for DIA
+    detections, 0 for forced-only points). See :func:`merge_photometry` for how the light
+    curve is assembled. The per-point fields collate padded to the longest light curve in the
+    batch, each with a ``<field>_mask``.
 
     Subscribe to every Babamul LSST topic with
     ``[data_set.KafkaStreamDataset] topics = "^babamul\\\\.lsst\\\\..*"``. ZTF matches in
@@ -94,6 +97,6 @@ class BabamulLsstConsumer(LightCurveCollationMixin, BabamulConsumer):
         """Band of each point."""
         return merge_photometry(msg)["band"]
 
-    def get_detected(self, msg):
-        """Whether each point is a DIA detection rather than forced photometry only."""
-        return merge_photometry(msg)["detected"]
+    def get_photflag(self, msg):
+        """ELAsTiCC ``PHOTFLAG`` of each point: a detection for DIA detections, 0 for forced-only points."""
+        return np.where(merge_photometry(msg)["detected"], DETECTION_PHOTFLAG, 0).astype(np.int64)

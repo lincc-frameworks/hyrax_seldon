@@ -1,12 +1,14 @@
 import numpy as np
 import pandas as pd
 import pytest
-from seldon_fixtures import SATURATION_FLAG, target_yaml_text
+from seldon_fixtures import prepare_inputs
 
 from hyrax_seldon.collate import collate_light_curve_field
 from hyrax_seldon.datasets.elasticc_parquet import ElasticcParquetDataset
+from hyrax_seldon.settings import SeldonSettings
 
-FIELDS = ["time", "flux", "flux_err", "band", "detected"]
+FIELDS = ["time", "flux", "flux_err", "band", "photflag"]
+COLUMNS = {"time": "MJD", "flux": "FLUXCAL", "flux_err": "FLUXCALERR", "band": "BAND", "photflag": "PHOTFLAG"}
 
 
 @pytest.fixture
@@ -16,25 +18,40 @@ def dataset(elasticc_parquet):
     return ElasticcParquetDataset(config, data_location=elasticc_parquet)
 
 
-@pytest.fixture(scope="module")
-def seldon_loader(elasticc_parquet):
-    """SELDON's own data module, set up from the same parquet file with the target config."""
-    from omegaconf import OmegaConf
+def _collate(dataset, indices):
+    """Collate the dataset's per-point fields for ``indices`` as Hyrax does."""
+    samples = [{field: getattr(dataset, f"get_{field}")(i) for field in FIELDS} for i in indices]
+    batch = {}
+    for field in FIELDS:
+        batch.update(getattr(dataset, f"collate_{field}")(samples))
+    return batch
+
+
+@pytest.fixture
+def seldon_batch(elasticc_parquet, seldon_config):
+    """SELDON's own training data path over the same parquet file, without augmentations.
+
+    The run's data module is set up from the file as SELDON's train.py does, and every light
+    curve is prepared by its LightCurvePreprocessor and enhanced_collate_fn.
+    """
+    import copy
+
     from TAE.datasets.dataset_factory import get_module as get_dataset
+    from TAE.datasets.lightcurve_dataset import enhanced_collate_fn
 
-    from hyrax_seldon.settings import band_index_map
-
-    config = OmegaConf.create(target_yaml_text())
-    OmegaConf.resolve(config)
-    dataset_config = OmegaConf.to_container(config)["dataset"]["config"]
-    dataset_config.update(lightcurve_path=[str(elasticc_parquet)], num_workers=0, augmentations=None)
-
-    band_index = band_index_map(dataset_config)
-    loader = get_dataset("FlexibleLightCurveDataLoader", dataset_config)
-    loader.setup()
-    loader.test_band_index = band_index
-    yield loader
-    loader.manager.shutdown()
+    run_config = SeldonSettings.from_config(seldon_config).run_config
+    dataset_config = copy.deepcopy(run_config["dataset"]["config"])
+    dataset_config.update(
+        lightcurve_path=[str(elasticc_parquet)], num_workers=0, augmentations=None, resample=False
+    )
+    loader = get_dataset(run_config["dataset"]["name"], dataset_config)
+    try:
+        loader.setup()
+        # The run was trained on this file, so setup() recomputes the run's statistics.
+        assert loader.flux_stats == pytest.approx(run_config["dataset"]["config"]["flux_stats"])
+        return enhanced_collate_fn([loader.dataset[i] for i in range(len(loader.dataset))])
+    finally:
+        loader.manager.shutdown()
 
 
 def test_length_and_ids(dataset, elasticc_parquet):
@@ -45,37 +62,27 @@ def test_length_and_ids(dataset, elasticc_parquet):
     assert [dataset.get_object_id(i) for i in range(len(dataset))] == [str(s) for s in table["SNID"]]
 
 
-def test_getters_drop_saturated_points(dataset, elasticc_parquet):
-    """Saturated points are dropped; every other point is emitted raw, in file order."""
+def test_getters_emit_raw_columns(dataset, elasticc_parquet):
+    """Every point is emitted as stored, saturated ones included."""
     row = pd.read_parquet(elasticc_parquet).iloc[3]
-    kept = (np.asarray(row["PHOTFLAG"]) & SATURATION_FLAG) == 0
-    assert not kept.all()
+    assert (np.asarray(row["PHOTFLAG"]) & 1024).any()
 
-    np.testing.assert_array_equal(dataset.get_time(3), np.asarray(row["MJD"])[kept])
-    np.testing.assert_array_equal(dataset.get_flux(3), np.asarray(row["FLUXCAL"])[kept])
-    np.testing.assert_array_equal(dataset.get_flux_err(3), np.asarray(row["FLUXCALERR"])[kept])
-    np.testing.assert_array_equal(dataset.get_band(3), np.asarray(row["BAND"])[kept])
-    np.testing.assert_array_equal(dataset.get_detected(3), (np.asarray(row["PHOTFLAG"]) > 0)[kept])
+    for field, column in COLUMNS.items():
+        np.testing.assert_array_equal(getattr(dataset, f"get_{field}")(3), np.asarray(row[column]))
     assert dataset.get_time(3).dtype == np.float64
-    assert dataset.get_detected(3).dtype == bool
-    assert (~dataset.get_detected(3)).any()
+    assert dataset.get_photflag(3).dtype == np.int64
 
 
-def test_getters_match_seldon_extraction(dataset, seldon_loader):
-    """The points, bands and detection flags match what SELDON's own parquet loader extracts."""
-    assert len(seldon_loader.full_light_curve_array) == len(dataset)
-    band_index = seldon_loader.test_band_index
+def test_prepared_inputs_match_seldon(dataset, seldon_config, seldon_batch):
+    """The dataset and prepare_inputs give exactly what SELDON's own data path gives."""
+    ours = prepare_inputs(_collate(dataset, range(len(dataset))), seldon_config)
 
-    for i in range(len(dataset)):
-        light_curve = seldon_loader.full_light_curve_array[i]
-        np.testing.assert_array_equal(light_curve[:, 0], dataset.get_time(i).astype(np.float32))
-        np.testing.assert_array_equal(light_curve[:, 1], dataset.get_flux(i).astype(np.float32))
-        np.testing.assert_array_equal(light_curve[:, 2], dataset.get_flux_err(i).astype(np.float32))
-        np.testing.assert_array_equal(
-            seldon_loader.meta_data["detection_flag"][i][:, 0], dataset.get_detected(i).astype(np.float32)
-        )
-        bands = [band_index[b.lower()] for b in dataset.get_band(i)]
-        np.testing.assert_array_equal(seldon_loader.band_array[i], bands)
+    assert len(seldon_batch["x_input"]) == len(dataset)
+    for key in ["time_full", "band_idx", "band_idx_full", "pad_mask_part", "pad_mask_full"]:
+        np.testing.assert_array_equal(ours[key], seldon_batch[key].numpy(), err_msg=key)
+    # setup() recomputes the flux statistics as float32, where the run config stores them as
+    # floats; the scaled fluxes differ in their last float32 bit.
+    np.testing.assert_allclose(ours["x_input"], seldon_batch["x_input"].numpy(), rtol=0, atol=1e-7)
 
 
 def test_collate_pads_with_masks(dataset):
@@ -92,16 +99,16 @@ def test_collate_pads_with_masks(dataset):
 
 
 def test_collate_padding_values():
-    """Padding is zero, empty-string or false, never a value that looks like data."""
+    """Padding is zero or an empty string, never a value that looks like data."""
     out = collate_light_curve_field([{"band": np.array(["u"])}, {"band": np.array(["g", "r"])}], "band")
     assert out["band"].tolist() == [["u", ""], ["g", "r"]]
     assert out["band_mask"].tolist() == [[True, False], [True, True]]
 
     out = collate_light_curve_field(
-        [{"detected": np.array([True])}, {"detected": np.array([], dtype=bool)}], "detected"
+        [{"photflag": np.array([4096])}, {"photflag": np.array([], dtype=np.int64)}], "photflag"
     )
-    assert out["detected"].dtype == bool
-    assert out["detected_mask"].tolist() == [[True], [False]]
+    assert out["photflag"].tolist() == [[4096], [0]]
+    assert out["photflag_mask"].tolist() == [[True], [False]]
 
 
 def _write_infer_config(tmp_path, parquet, weights, reconstruction_grid=False):
@@ -128,7 +135,7 @@ model_weights_file = "{weights}"
 dataset_class = "hyrax_seldon.datasets.elasticc_parquet.ElasticcParquetDataset"
 data_location = "{parquet}"
 primary_id_field = "object_id"
-fields = ["time", "flux", "flux_err", "band", "detected"]
+fields = ["time", "flux", "flux_err", "band", "photflag"]
 """
     )
     return config_file

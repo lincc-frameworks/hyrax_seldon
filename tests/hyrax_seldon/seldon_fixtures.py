@@ -107,13 +107,13 @@ def make_elasticc_parquet(path, n_objects=20, min_length=90, max_length=160, see
 
 
 def random_light_curve(rng, n_points, detected_fraction=0.9):
-    """Return raw per-point arrays: float32 MJD (as SELDON stores it), flux, error, band, detected."""
+    """Return raw per-point arrays: float32 MJD (as SELDON stores it), flux, error, band, PHOTFLAG."""
     mjd = (60000.0 + np.cumsum(rng.uniform(0.3, 3.0, n_points))).astype(np.float32)
     flux = rng.normal(800.0, 900.0, n_points).astype(np.float32)
     flux_err = rng.uniform(5.0, 40.0, n_points).astype(np.float32)
     band = rng.choice(LSST_BANDS, n_points)
-    detected = rng.random(n_points) < detected_fraction
-    return mjd, flux, flux_err, band, detected
+    photflag = np.where(rng.random(n_points) < detected_fraction, DETECTION_FLAG, 0).astype(np.int64)
+    return mjd, flux, flux_err, band, photflag
 
 
 def collate_light_curves(light_curves):
@@ -125,7 +125,7 @@ def collate_light_curves(light_curves):
         ("flux", 1, 0.0),
         ("flux_err", 2, 0.0),
         ("band", 3, ""),
-        ("detected", 4, False),
+        ("photflag", 4, 0),
     ]:
         values = [lc[index] for lc in light_curves]
         padded = np.full((len(values), length), pad, dtype=np.asarray(values[0]).dtype)
@@ -136,6 +136,19 @@ def collate_light_curves(light_curves):
         batch[name] = padded
         batch[f"{name}_mask"] = mask
     return batch
+
+
+def prepare_inputs(batch, config):
+    """Run ``HyraxSeldon.prepare_inputs`` on a batch's ``"data"`` group, as a verb run does.
+
+    ``config`` is installed in Hyrax's run context, where ``prepare_inputs`` reads it.
+    """
+    from hyrax.context import run_context
+
+    from hyrax_seldon.models.seldon import HyraxSeldon
+
+    with run_context("infer", config=config):
+        return HyraxSeldon.prepare_inputs({"data": batch})
 
 
 def target_yaml_text():

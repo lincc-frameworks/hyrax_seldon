@@ -14,14 +14,14 @@ time_field = "time"          # MJD
 flux_field = "flux"          # ELAsTiCC FLUXCAL scale (zero point 27.5)
 flux_err_field = "flux_err"
 band_field = "band"          # band name, e.g. "u".."y"
-detected_field = "detected"  # true for detections, false for forced photometry
+photflag_field = "photflag"  # ELAsTiCC PHOTFLAG: 4096 marks a detection, 1024 saturation
 
 # Also evaluate the decoder on a fixed time grid for each of the six LSST bands.
 reconstruction_grid = false
 # Number of grid times.
 grid_points = 64
 # [start, end] of the grid in days, relative to the last observation the model sees
-# (the last of the earliest max_length points).
+# (the last of the at most max_length points it reconstructs).
 grid_horizon = [-50.0, 50.0]
 
 [data_set.ElasticcParquetDataset]
