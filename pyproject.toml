@@ -19,8 +19,8 @@ dynamic = ["version"]
 requires-python = ">=3.11"
 dependencies = [
     "hyrax >= 0.11",
-    # hyrax_alerts is not on PyPI and has no release tags.
-    "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@4c5a76dbc7b84c21dd6d7bc4ef0bb163ec65c585",
+    # hyrax_alerts is not on PyPI.
+    "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@main",
     "fastavro",
     "lightning == 2.5.2",
     "numpy",
