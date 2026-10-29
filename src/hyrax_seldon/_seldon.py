@@ -11,12 +11,12 @@ Importing SELDON has side effects that are contained here:
   ``nn.Module.compile()`` in their constructors. :func:`build_model` undoes that unless
   compilation is requested.
 
-- ``LightCurvePreprocessor``'s constructor reseeds NumPy's global random number generator
-  (``np.random.seed(42)``) and prints. :func:`preprocess` restores the generator's state
-  afterwards and captures the print.
-
-SELDON's data modules (``FlexibleLightCurveDataLoader``, which starts a
-``multiprocessing.Manager``) are never used at runtime.
+- ``FlexibleLightCurveDataLoader``'s constructor starts a ``multiprocessing.Manager`` it
+  never uses. :func:`build_data_module` builds it without one.
+- SELDON's data module and ``LightCurvePreprocessor`` print progress to stdout and stderr,
+  and the preprocessor's constructor reseeds NumPy's global random number generator
+  (``np.random.seed(42)``). :func:`preprocess` captures the output and restores the
+  generator's state afterwards.
 """
 
 import contextlib
@@ -25,6 +25,7 @@ import importlib
 import io
 import sys
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -157,65 +158,135 @@ def build_model(model_params: dict, compile: bool = False):
     return model
 
 
-#: Class name given to every light curve handed to SELDON's preprocessor. It requires a class
-#: name and weight per light curve, but they only feed its training bookkeeping.
-PLACEHOLDER_CLASS = "Unknown"
+#: ``dataset.config`` settings overridden when the run's data module prepares new light curves:
+#: they come from Hyrax rather than from files, carry no class, and are encoded without the
+#: training augmentations or resampling noise.
+INFERENCE_OVERRIDES = {
+    "lightcurve_path": None,
+    "fine_tune_data": None,
+    "class_filter": None,
+    "augmentations": None,
+    "resample": False,
+    "num_workers": 0,
+    "pin_memory": False,
+}
 
 
-def preprocess(
-    light_curves, band_indices, detection_flags, flux_stats, band_weights, **options
-) -> dict[str, np.ndarray]:
-    """Run SELDON's ``LightCurvePreprocessor`` and ``enhanced_collate_fn`` over a batch.
-
-    The preprocessor is built without augmentations and without resampling noise, so it
-    selects the earliest ``max_points`` points for the encoder (``FullSample``). Light curves
-    longer than ``max_length`` get a random window from SELDON, so trim them first.
+def build_data_module(dataset: dict):
+    """Build a SELDON run's data module, to prepare new light curves with.
 
     Parameters
     ----------
-    light_curves : list[numpy.ndarray]
-        One ``(n, 3)`` float32 array per light curve: time (MJD), flux, flux error, with flux
-        already divided by the run's ``zero_point_flux``.
-    band_indices : list[numpy.ndarray]
-        One ``(n,)`` int64 array of SELDON band indices per light curve.
-    detection_flags : list[numpy.ndarray]
-        One ``(n,)`` bool array per light curve.
-    flux_stats : dict
-        The run config's ``dataset.config.flux_stats``.
-    band_weights : dict
-        The run config's ``dataset.config.band_weights``.
-    **options
-        ``LightCurvePreprocessor`` settings from the run config: ``flux_normalization``,
-        ``time_normalization``, ``min_points``, ``max_points``, ``max_length``, ``t_offset``.
+    dataset : dict
+        The ``dataset`` section of a resolved SELDON run config (``name`` and ``config``), with
+        transmission paths already resolved. It is not modified.
+
+    Returns
+    -------
+    FlexibleLightCurveDataLoader
+        The data module, configured as in the run except for :data:`INFERENCE_OVERRIDES`. Its
+        ``flux_stats`` and ``band_weights`` are the run's.
+    """
+    loader_module = _import("TAE.datasets.lightcurve_dataloader2")
+    factory = _import("TAE.datasets.dataset_factory")
+
+    config = copy.deepcopy(dataset["config"])
+    config.update(INFERENCE_OVERRIDES)
+    with (
+        mock.patch.object(loader_module, "Manager", lambda: None),
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
+        return factory.get_module(dataset["name"], config)
+
+
+def preprocess(data_module, light_curves) -> dict[str, np.ndarray]:
+    """Prepare a batch of light curves for the model the way SELDON prepares new data.
+
+    The light curves go through the run's data module (``load_data``, ``init_class_weights``,
+    ``init_light_curves``, ``init_band_index``, ``init_meta_data``), then through a
+    ``LightCurvePreprocessor`` built as the data module's ``setup()`` builds it, and SELDON's
+    ``enhanced_collate_fn``. The data module keeps the run's statistics: its
+    ``init_data_stats`` is not called.
+
+    Every light curve is kept, including those with fewer than ``min_points`` detections, which
+    SELDON's ``load_data`` would drop.
+
+    Parameters
+    ----------
+    data_module : FlexibleLightCurveDataLoader
+        From :func:`build_data_module`. Each call replaces the light curves it holds.
+    light_curves : pandas.DataFrame
+        One row per light curve in the schema of SELDON's parquet files: per-point list columns
+        ``MJD``, ``FLUXCAL``, ``FLUXCALERR``, ``BAND`` and ``PHOTFLAG``.
 
     Returns
     -------
     dict[str, numpy.ndarray]
-        The tensors of ``enhanced_collate_fn``'s batch, as numpy arrays.
+        The tensors of ``enhanced_collate_fn``'s batch, as numpy arrays, and ``n_detections``:
+        each light curve's detection count as SELDON's ``load_data`` computes it (``nobs``).
+
+    Raises
+    ------
+    ValueError
+        If a light curve has fewer than ``min_points`` points, which SELDON cannot encode, or a
+        band the data module's band index map does not know.
     """
     preprocessor_module = _import("TAE.datasets.lightcurve_preprocessor")
     collate = _import("TAE.datasets.lightcurve_dataset").enhanced_collate_fn
     import torch
 
-    meta_data = {"detection_flag": [flags.astype(np.float32)[:, None] for flags in detection_flags]}
-
+    min_points = data_module.min_points
     rng_state = np.random.get_state()
+    samples, too_short = [], []
     try:
-        with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            data_module.lightcurve_path = light_curves
+            # load_data drops light curves with fewer than min_points detections; keep them all.
+            data_module.min_points = 0
+            try:
+                data_module.load_data()
+            finally:
+                data_module.min_points = min_points
+            data_module.init_class_weights()
+            data_module.init_light_curves()
+            try:
+                data_module.init_band_index()
+            except KeyError as err:
+                raise ValueError(
+                    f"Band {err.args[0]!r} is not one of the bands this SELDON model knows: "
+                    f"{sorted(data_module.band_index_map)}."
+                ) from None
+            data_module.init_meta_data()
+
             preprocessor = preprocessor_module.LightCurvePreprocessor(
-                light_curves=light_curves,
-                class_names=[PLACEHOLDER_CLASS] * len(light_curves),
-                class_weights={PLACEHOLDER_CLASS: 1.0},
-                band_indices=band_indices,
-                band_weights=band_weights,
-                flux_stats=flux_stats,
-                meta_data=meta_data,
-                augmentations=None,
-                resample=False,
-                **options,
+                light_curves=data_module.full_light_curve_array,
+                class_names=data_module.full_class_names,
+                class_weights=data_module.class_weights,
+                band_indices=data_module.band_array,
+                band_weights=data_module.band_weights,
+                flux_stats=data_module.flux_stats,
+                min_points=data_module.min_points,
+                max_points=data_module.max_points,
+                meta_data=data_module.meta_data,
+                **data_module.kwargs,
             )
-        batch = collate([preprocessor[i] for i in range(len(light_curves))])
+            for index in range(len(preprocessor)):
+                try:
+                    samples.append(preprocessor[index])
+                except AssertionError:
+                    # SELDON asserts that the encoder gets at least min_points points.
+                    too_short.append(index)
     finally:
         np.random.set_state(rng_state)
 
-    return {key: value.numpy() for key, value in batch.items() if isinstance(value, torch.Tensor)}
+    if too_short:
+        lengths = [len(data_module.full_light_curve_array[index]) for index in too_short]
+        raise ValueError(
+            f"Light curves at batch rows {too_short} have {lengths} points, fewer than the run "
+            f"config's min_points={min_points}; SELDON cannot encode them."
+        )
+
+    batch = {key: value.numpy() for key, value in collate(samples).items() if isinstance(value, torch.Tensor)}
+    batch["n_detections"] = data_module.full_light_curves["nobs"].to_numpy(dtype=np.int64)
+    return batch

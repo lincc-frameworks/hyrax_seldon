@@ -6,10 +6,8 @@ import numpy as np
 import pytest
 import torch
 import yaml
-from seldon_fixtures import collate_light_curves, random_light_curve
-
-from hyrax_seldon.encoding import encode_batch
 from hyrax_seldon.models.seldon import SELDON_CONFIG_FILENAME, HyraxSeldon
+from seldon_fixtures import collate_light_curves, prepare_inputs, random_light_curve
 
 DETERMINISTIC_KEYS = [
     "reconstructed",
@@ -60,13 +58,13 @@ def _light_curves(lengths, seed=0, detected_fractions=None):
 
 
 @pytest.fixture
-def batch(model):
+def batch(model, hyrax_config):
     """Prepared model inputs for light curves of several lengths, the last with few detections.
 
     The inputs are on the model's device, as Hyrax places them.
     """
     light_curves = _light_curves([150, 600, 70, 40], detected_fractions=[0.9, 0.9, 0.9, 0.3])
-    prepared = encode_batch(collate_light_curves(light_curves), model.settings)
+    prepared = prepare_inputs(collate_light_curves(light_curves), hyrax_config)
     return {key: torch.from_numpy(value).to(_device(model)) for key, value in prepared.items()}
 
 
@@ -233,12 +231,11 @@ def test_output_keys_and_fixed_shapes(model, batch):
 
 
 def test_short_lightcurve_flag(model, batch):
-    """Light curves whose encoder input has fewer than min_points detections are flagged."""
+    """Light curves with fewer than min_points detections, by SELDON's count, are flagged."""
     with torch.no_grad():
         out = model.infer_batch(batch)
 
-    detections = ((batch["x_input"][..., 3] > 0) & batch["pad_mask_part"]).sum(dim=1)
-    assert out["short_lightcurve"].tolist() == (detections < 32).tolist()
+    assert out["short_lightcurve"].tolist() == (batch["n_detections"] < 32).tolist()
     assert out["short_lightcurve"].tolist() == [False, False, False, True]
 
 
@@ -366,7 +363,7 @@ def test_reconstruction_grid_values(grid_model, batch):
         last = int(n_points[row]) - 1
         # At offset 0, the grid in the band of the last observation is the reconstruction there.
         band = int(batch["band_idx_full"][row, last, 0])
-        band_row = [settings.band_to_index(b) for b in LSST_BANDS].index(band)
+        band_row = [settings.band_index_map[b] for b in LSST_BANDS].index(band)
         torch.testing.assert_close(
             out["grid_reconstructed"][row, band_row, 1], out["reconstructed"][row, last, 0]
         )
@@ -374,7 +371,7 @@ def test_reconstruction_grid_values(grid_model, batch):
 
     # +10 days, in the r band, through decode() directly.
     t = batch["time_full"][:, -1:, :] + 10.0 / settings.t_max
-    r_band = torch.full((4, 1, 1), settings.band_to_index("r"), device=t.device)
+    r_band = torch.full((4, 1, 1), settings.band_index_map["r"], device=t.device)
     with torch.no_grad():
         reconstructed, _ = grid_model.decode(out["decoder_inputs"], t, r_band)
     torch.testing.assert_close(out["grid_reconstructed"][:, LSST_BANDS.index("r"), 2], reconstructed[:, 0, 0])

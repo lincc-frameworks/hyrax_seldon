@@ -1,9 +1,8 @@
 import pytest
 import yaml
-from seldon_fixtures import TARGET_CONFIG
-
 from hyrax_seldon import _seldon
 from hyrax_seldon.settings import LSST_BANDS, NotSupportedError, SeldonSettings
+from seldon_fixtures import TARGET_CONFIG
 
 
 def _write_run_config(tmp_path, run_config_path, edit):
@@ -21,23 +20,33 @@ def test_reads_run_config(seldon_config):
     """Settings come from the run config's dataset.config and flux_stats."""
     settings = SeldonSettings.from_config(seldon_config)
 
-    assert settings.max_points == 64
-    assert settings.max_length == 512
     assert settings.min_points == 32
     assert settings.t_max == 20.0
-    assert settings.t_offset == 0.0
-    assert settings.zero_point_flux == 1.0
-    assert settings.include_non_detections
-    assert settings.flux_max > 0
     assert len(settings.class_names) == 10
     assert settings.model_params["name"] == "SELDONEnergyClassifierDictModel"
 
 
+def test_data_module_is_the_runs(seldon_config):
+    """The data module is configured from the run config, keeping the run's statistics."""
+    settings = SeldonSettings.from_config(seldon_config)
+    dataset_config = settings.run_config["dataset"]["config"]
+    data_module = settings.data_module
+
+    assert type(data_module).__name__ == "FlexibleLightCurveDataLoader"
+    assert data_module.flux_stats == dataset_config["flux_stats"]
+    assert data_module.band_weights == dataset_config["band_weights"]
+    assert data_module.max_points == 64
+    assert data_module.kwargs["max_length"] == 512
+    assert data_module.manager is None
+    # The data module is built once per run config.
+    assert SeldonSettings.from_config(seldon_config).data_module is data_module
+
+
 def test_lsst_band_indices(seldon_config):
-    """The band index map is SELDON's sorted filter-dictionary order."""
+    """The band index map is SELDON's, built from the run config's filter dictionary."""
     settings = SeldonSettings.from_config(seldon_config)
 
-    assert {band: settings.band_to_index(band) for band in LSST_BANDS} == {
+    assert {band: settings.band_index_map[band] for band in LSST_BANDS} == {
         "u": 40,
         "g": 37,
         "r": 39,
@@ -45,10 +54,6 @@ def test_lsst_band_indices(seldon_config):
         "z": 42,
         "y": 41,
     }
-    # Single-character bands are lower-cased, as SELDON does for ELAsTiCC's "Y".
-    assert settings.band_to_index("Y") == 41
-    with pytest.raises(ValueError, match="'J'"):
-        settings.band_to_index("J")
 
 
 def test_transmission_paths_resolved_to_installed_files(seldon_config):
@@ -113,14 +118,14 @@ def test_unsupported_model_rejected(tmp_path, run_config_path, model_config):
         SeldonSettings.from_config({"model": {"HyraxSeldon": model_config}})
 
 
-def test_unsupported_band_map_rejected(tmp_path, run_config_path, model_config):
-    """Only a file-based BandIndexMap is supported."""
+def test_unsupported_data_module_rejected(tmp_path, run_config_path, model_config):
+    """Only FlexibleLightCurveDataLoader is supported."""
 
     def edit(config):
-        config["dataset"]["config"]["band_index_map"]["config"]["mode"] = "sncosmo"
+        config["dataset"]["name"] = "SNDataModuleParquet"
 
     model_config["seldon_config"] = str(_write_run_config(tmp_path, run_config_path, edit))
-    with pytest.raises(NotSupportedError, match="band_index_map.config.mode = 'sncosmo'"):
+    with pytest.raises(NotSupportedError, match="dataset.name = 'SNDataModuleParquet'"):
         SeldonSettings.from_config({"model": {"HyraxSeldon": model_config}})
 
 

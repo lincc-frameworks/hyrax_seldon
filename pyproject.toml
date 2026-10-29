@@ -16,18 +16,21 @@ classifiers = [
     "Programming Language :: Python",
 ]
 dynamic = ["version"]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
-    "hyrax >= 0.11",
-    "hyrax_alerts",
+    # HyraxSeldon.prepare_inputs returns a dict, which needs hyrax after v0.13 (#1078).
+    "hyrax @ git+https://github.com/lincc-frameworks/hyrax@main",
+    # hyrax_alerts is not on PyPI.
+    "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@main",
     "fastavro",
     "lightning == 2.5.2",
     "numpy",
     "omegaconf",
     "pandas",
     "pyarrow",
-    # SELDON v1.2.0. SELDON declares no torch/lightning dependency.
-    "seldon_core @ git+https://github.com/skai-institute/seldon@v1.2.0",
+    # SELDON v1.2.0 plus a load_data that accepts a DataFrame. SELDON declares no
+    # torch/lightning dependency.
+    "seldon_core @ git+https://github.com/mtauraso/seldon@dataframe-lightcurve-path",
 ]
 
 [project.urls]

@@ -3,21 +3,19 @@ from hyrax.datasets import HyraxDataset
 
 from hyrax_seldon.collate import LightCurveCollationMixin
 
-#: ELAsTiCC PHOTFLAG bit for a saturated point.
-SATURATION_FLAG = 1024
-
 
 class ElasticcParquetDataset(LightCurveCollationMixin, HyraxDataset):
     """ELAsTiCC light curves from a parquet file, one object per row, as raw per-point fields.
 
     The file has SELDON's ELAsTiCC schema: list columns ``MJD``, ``FLUXCAL``, ``FLUXCALERR``,
-    ``BAND`` and ``PHOTFLAG``, and a scalar ``SNID``. Saturated points (``PHOTFLAG & 1024``)
-    are dropped, as SELDON does; non-detections are kept and flagged.
+    ``BAND`` and ``PHOTFLAG``, and a scalar ``SNID``. Every point is emitted as stored;
+    ``HyraxSeldon`` leaves selecting points (dropping saturated ones, and non-detections if
+    the run excluded them) to SELDON.
 
-    Fields: ``object_id`` (the ``SNID``, as a string), and per point ``time`` (MJD), ``flux``
-    and ``flux_err`` (``FLUXCAL`` scale), ``band`` and ``detected`` (``PHOTFLAG > 0``). The
-    per-point fields collate padded to the longest light curve in the batch, each with a
-    ``<field>_mask``.
+    Fields: ``object_id`` (the ``SNID``, as a string), and per point ``time`` (``MJD``),
+    ``flux`` (``FLUXCAL``), ``flux_err`` (``FLUXCALERR``), ``band`` (``BAND``) and ``photflag``
+    (``PHOTFLAG``). The per-point fields collate padded to the longest light curve in the
+    batch, each with a ``<field>_mask``.
     """
 
     COLUMNS = ["SNID", "MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
@@ -36,37 +34,26 @@ class ElasticcParquetDataset(LightCurveCollationMixin, HyraxDataset):
     def __len__(self):
         return len(self.table)
 
-    def _kept(self, idx):
-        """Return the row and the mask of its non-saturated points."""
-        row = self.table.iloc[idx]
-        photflag = np.asarray(row["PHOTFLAG"], dtype=np.int64)
-        return row, (photflag & SATURATION_FLAG) == 0
-
     def get_object_id(self, idx):
         """The object's ``SNID``."""
         return str(self.table.iloc[idx]["SNID"])
 
     def get_time(self, idx):
-        """MJD of each point."""
-        row, kept = self._kept(idx)
-        return np.asarray(row["MJD"], dtype=np.float64)[kept]
+        """``MJD`` of each point."""
+        return np.asarray(self.table.iloc[idx]["MJD"], dtype=np.float64)
 
     def get_flux(self, idx):
         """``FLUXCAL`` of each point."""
-        row, kept = self._kept(idx)
-        return np.asarray(row["FLUXCAL"], dtype=np.float64)[kept]
+        return np.asarray(self.table.iloc[idx]["FLUXCAL"], dtype=np.float64)
 
     def get_flux_err(self, idx):
         """``FLUXCALERR`` of each point."""
-        row, kept = self._kept(idx)
-        return np.asarray(row["FLUXCALERR"], dtype=np.float64)[kept]
+        return np.asarray(self.table.iloc[idx]["FLUXCALERR"], dtype=np.float64)
 
     def get_band(self, idx):
-        """Band name of each point."""
-        row, kept = self._kept(idx)
-        return np.asarray(row["BAND"]).astype(str)[kept]
+        """``BAND`` of each point."""
+        return np.asarray(self.table.iloc[idx]["BAND"]).astype(str)
 
-    def get_detected(self, idx):
-        """Whether each point is a detection (``PHOTFLAG > 0``)."""
-        row, kept = self._kept(idx)
-        return (np.asarray(row["PHOTFLAG"], dtype=np.int64) > 0)[kept]
+    def get_photflag(self, idx):
+        """``PHOTFLAG`` of each point."""
+        return np.asarray(self.table.iloc[idx]["PHOTFLAG"], dtype=np.int64)

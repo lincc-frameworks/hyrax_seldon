@@ -8,7 +8,7 @@ LIGHT_CURVE_FIELDS = {
     "flux": 0.0,
     "flux_err": 0.0,
     "band": "",
-    "detected": False,
+    "photflag": 0,
 }
 
 
@@ -59,6 +59,6 @@ class LightCurveCollationMixin:
         """Pad ``band`` across the batch; see :func:`collate_light_curve_field`."""
         return collate_light_curve_field(samples, "band")
 
-    def collate_detected(self, samples):
-        """Pad ``detected`` across the batch; see :func:`collate_light_curve_field`."""
-        return collate_light_curve_field(samples, "detected")
+    def collate_photflag(self, samples):
+        """Pad ``photflag`` across the batch; see :func:`collate_light_curve_field`."""
+        return collate_light_curve_field(samples, "photflag")

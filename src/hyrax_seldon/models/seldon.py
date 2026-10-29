@@ -11,6 +11,12 @@ model as ``model``, so the checkpoint's weights load into ``HyraxSeldon`` key fo
 
 Saving writes the run config next to the weights as ``seldon_config.yaml``, so weights saved
 by Hyrax keep the settings they were trained with.
+
+Datasets emit raw per-point values in the terms of SELDON's parquet files: MJD, flux on the
+ELAsTiCC ``FLUXCAL`` scale, flux error, band name, and ELAsTiCC ``PHOTFLAG``.
+:meth:`HyraxSeldon.prepare_inputs` removes the padding Hyrax's collation added and hands the
+light curves to SELDON, which prepares them with the run's own data module and preprocessor,
+as it prepares new data (see :func:`hyrax_seldon._seldon.preprocess`).
 """
 
 import logging
@@ -18,6 +24,8 @@ import shutil
 from pathlib import Path
 
 import ignite.distributed as idist
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
@@ -30,6 +38,20 @@ logger = logging.getLogger(__name__)
 
 #: File name of the SELDON run config written next to saved weights.
 SELDON_CONFIG_FILENAME = "seldon_config.yaml"
+
+#: Name of the batch group the light-curve fields are read from.
+DATA_GROUP = "data"
+
+#: The entries of SELDON's prepared batch that are passed on to the model.
+MODEL_INPUTS = (
+    "x_input",
+    "band_idx",
+    "pad_mask_part",
+    "time_full",
+    "band_idx_full",
+    "pad_mask_full",
+    "n_detections",
+)
 
 
 @hyrax_model
@@ -57,7 +79,7 @@ class HyraxSeldon(nn.Module):
         self.model = _seldon.build_model(self.settings.model_params, compile=self.settings.compile)
 
     def forward(self, x, t, band_idx_part, band_idx_full, mask=None):
-        """Run SELDON's ``forward()``; see :func:`hyrax_seldon.encoding.encode_batch` for inputs."""
+        """Run SELDON's ``forward()``; see :meth:`prepare_inputs` for inputs."""
         return self.model(x, t, band_idx_part, band_idx_full, mask=mask)
 
     def train_batch(self, batch):
@@ -122,7 +144,7 @@ class HyraxSeldon(nn.Module):
         grid_t = t_last[:, None, None] + offsets[None, None, :] / settings.t_max
         grid_t = grid_t.expand(n_batch, n_bands, n_grid).reshape(n_batch, n_bands * n_grid, 1)
 
-        bands = torch.tensor([settings.band_to_index(band) for band in LSST_BANDS], device=device)
+        bands = torch.tensor([settings.band_index_map[band] for band in LSST_BANDS], device=device)
         grid_bands = bands[:, None].expand(n_bands, n_grid).reshape(1, n_bands * n_grid, 1)
         grid_bands = grid_bands.expand(n_batch, -1, -1)
 
@@ -152,11 +174,10 @@ class HyraxSeldon(nn.Module):
             predicts the class from a posterior sample even in eval mode. Also:
 
             - ``pad_mask_full`` ``(B, max_length)``: which entries of the per-point outputs
-              (``reconstructed``, ``error``) are real points. Those are the earliest
-              ``max_length`` valid points, in time order.
-            - ``short_lightcurve`` ``(B,)``: the encoder's points hold fewer than
-              ``min_points`` detections. SELDON's loader excludes such light curves from
-              training.
+              (``reconstructed``, ``error``) are real points, in time order. A light curve
+              longer than ``max_length`` gets SELDON's window of ``max_length`` points.
+            - ``short_lightcurve`` ``(B,)``: the light curve has fewer than ``min_points``
+              detections. SELDON's loader excludes such light curves from training.
             - with ``reconstruction_grid`` on: ``grid_time`` ``(B, grid_points)`` in days
               relative to the last observation in ``pad_mask_full``, and ``grid_reconstructed`` /
               ``grid_error`` ``(B, 6, grid_points)`` for the bands u, g, r, i, z, y.
@@ -179,8 +200,7 @@ class HyraxSeldon(nn.Module):
                 results[key] = value
 
         results["pad_mask_full"] = batch["pad_mask_full"]
-        detections = (batch["x_input"][..., 3] > 0) & batch["pad_mask_part"]
-        results["short_lightcurve"] = detections.sum(dim=1) < self.settings.min_points
+        results["short_lightcurve"] = batch["n_detections"] < self.settings.min_points
 
         if self.settings.reconstruction_grid:
             results.update(self._reconstruction_grid(out["decoder_inputs"], batch["time_full"]))
@@ -188,31 +208,105 @@ class HyraxSeldon(nn.Module):
         return results
 
     @staticmethod
+    def light_curve_frame(data: dict, settings: SeldonSettings) -> pd.DataFrame:
+        """Remove a batch's padding, giving one row per light curve in SELDON's parquet schema.
+
+        Parameters
+        ----------
+        data : dict
+            The batch's ``"data"`` group: per-point fields of shape ``(batch, length)``. Entries
+            where any field's ``<field>_mask`` is false are padding.
+        settings : SeldonSettings
+            Names the fields.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Per-point list columns ``MJD``, ``FLUXCAL``, ``FLUXCALERR``, ``BAND`` and ``PHOTFLAG``.
+        """
+        fields = {
+            "MJD": settings.time_field,
+            "FLUXCAL": settings.flux_field,
+            "FLUXCALERR": settings.flux_err_field,
+            "BAND": settings.band_field,
+            "PHOTFLAG": settings.photflag_field,
+        }
+        missing = [name for name in fields.values() if name not in data]
+        if missing:
+            raise RuntimeError(
+                f"HyraxSeldon could not find the field(s) {missing} in the batch. Available fields: "
+                f"{sorted(data)}. Set time_field / flux_field / flux_err_field / band_field / "
+                "photflag_field in [model.HyraxSeldon] and list them in the data request's 'fields'."
+            )
+
+        columns = {column: np.asarray(data[name]) for column, name in fields.items()}
+        shapes = {values.shape for values in columns.values()}
+        if len(shapes) > 1 or columns["MJD"].ndim != 2:
+            raise RuntimeError(
+                "HyraxSeldon expects every light-curve field to collate to the same (batch, length) "
+                f"shape, but got shapes {sorted(shapes)}."
+            )
+
+        valid = np.ones(columns["MJD"].shape, dtype=bool)
+        for name in fields.values():
+            mask = data.get(f"{name}_mask")
+            if mask is not None:
+                valid &= np.asarray(mask).astype(bool)
+
+        return pd.DataFrame(
+            {
+                column: [row[keep] for row, keep in zip(values, valid, strict=True)]
+                for column, values in columns.items()
+            }
+        )
+
+    @staticmethod
     def prepare_inputs(data_dict):
         """Build SELDON's model inputs from a collated batch.
-
-        The real work is in :func:`hyrax_seldon.encoding.prepare_inputs`, configured by the
-        SELDON run config; this is a shim so that the function written out to
-        ``prepare_inputs.py`` next to saved weights stays short and self-contained.
 
         Parameters
         ----------
         data_dict : dict
             The collated batch, with a ``"data"`` group holding the per-point light-curve
-            fields named in ``[model.HyraxSeldon]``.
+            fields named in ``[model.HyraxSeldon]``, padded per row, each optionally with a
+            ``<field>_mask``.
 
         Returns
         -------
         dict[str, numpy.ndarray]
-            See :func:`hyrax_seldon.encoding.encode_batch`.
+            With ``P = max_points`` and ``L = max_length`` from the run config:
+
+            - ``x_input`` ``(B, P, 4)`` float32: time, flux, flux error, detection flag of the
+              points the encoder sees
+            - ``band_idx`` ``(B, P, 1)`` int64, ``pad_mask_part`` ``(B, P)`` bool
+            - ``time_full`` ``(B, L, 1)`` float32: times where the decoder is evaluated
+            - ``band_idx_full`` ``(B, L, 1)`` int64, ``pad_mask_full`` ``(B, L)`` bool
+            - ``n_detections`` ``(B,)`` int64: detections in each light curve, as SELDON's
+              loader counts them
+
+        Raises
+        ------
+        ValueError
+            If a light curve has fewer than ``min_points`` points; SELDON cannot encode it.
         """
         # This function's source is written out to prepare_inputs.py next to the saved
         # weights and re-executed at load time, so it must import what it needs itself.
         from hyrax import get_context
 
-        from hyrax_seldon.encoding import prepare_inputs
+        from hyrax_seldon import _seldon
+        from hyrax_seldon.models.seldon import DATA_GROUP, MODEL_INPUTS, HyraxSeldon
+        from hyrax_seldon.settings import SeldonSettings
 
-        return prepare_inputs(data_dict, get_context()["config"])
+        if DATA_GROUP not in data_dict:
+            raise RuntimeError(
+                f"HyraxSeldon reads light curves from the '{DATA_GROUP}' group of the data request, "
+                f"but the batch only has {sorted(data_dict)}. Name the light-curve dataset "
+                f"'{DATA_GROUP}' in [data_request]."
+            )
+        settings = SeldonSettings.from_config(get_context()["config"])
+        light_curves = HyraxSeldon.light_curve_frame(data_dict[DATA_GROUP], settings)
+        batch = _seldon.preprocess(settings.data_module, light_curves)
+        return {key: batch[key] for key in MODEL_INPUTS}
 
 
 # @hyrax_model installs Hyrax's save/load on the class, replacing any defined in its body,

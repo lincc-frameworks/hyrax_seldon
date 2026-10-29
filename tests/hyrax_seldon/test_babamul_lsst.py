@@ -11,10 +11,14 @@ from babamul_fixtures import (
     make_light_curve_alert,
 )
 from hyrax_alerts.writers.base_writer import HyraxAlertsBaseWriter
+from hyrax_seldon.consumers.babamul_lsst import (
+    DETECTION_PHOTFLAG,
+    NJY_TO_FLUXCAL,
+    BabamulLsstConsumer,
+    merge_photometry,
+)
 
-from hyrax_seldon.consumers.babamul_lsst import NJY_TO_FLUXCAL, BabamulLsstConsumer, merge_photometry
-
-FIELDS = ["time", "flux", "flux_err", "band", "detected"]
+FIELDS = ["time", "flux", "flux_err", "band", "photflag"]
 
 
 class FakeMessage:
@@ -141,7 +145,8 @@ def test_getters(consumer):
         consumer.get_flux_err(alert), np.array([40.0, 50.0, 80.0, 60.0]) * NJY_TO_FLUXCAL
     )
     assert consumer.get_band(alert).tolist() == ["u", "g", "y", "r"]
-    assert consumer.get_detected(alert).tolist() == [False, True, False, True]
+    assert consumer.get_photflag(alert).tolist() == [0, DETECTION_PHOTFLAG, 0, DETECTION_PHOTFLAG]
+    assert consumer.get_photflag(alert).dtype == np.int64
 
 
 def test_realistic_alert(consumer):
@@ -155,7 +160,7 @@ def test_realistic_alert(consumer):
     assert time.max() == alert_mjd
     assert np.isfinite(consumer.get_flux(alert)).all()
     n_detections = sum(p["jd"] <= alert["candidate"]["jd"] for p in alert["prv_candidates"])
-    assert consumer.get_detected(alert).sum() == n_detections
+    assert (consumer.get_photflag(alert) == DETECTION_PHOTFLAG).sum() == n_detections
 
 
 def test_empty_forced_history(consumer):
@@ -165,7 +170,7 @@ def test_empty_forced_history(consumer):
     )
 
     assert alert["fp_hists"] == []
-    assert consumer.get_detected(alert).all()
+    assert (consumer.get_photflag(alert) == DETECTION_PHOTFLAG).all()
     assert len(consumer.get_time(alert)) == sum(
         p["jd"] <= alert["candidate"]["jd"] for p in alert["prv_candidates"]
     )
@@ -217,7 +222,7 @@ batch_flush_timeout = 0.0
 dataset_class = "test_babamul_lsst.FakeBabamulLsstConsumer"
 data_location = "kafka://localhost:9092"
 primary_id_field = "candid"
-fields = ["time", "flux", "flux_err", "band", "detected"]
+fields = ["time", "flux", "flux_err", "band", "photflag"]
 
 [model]
 name = "hyrax_seldon.models.seldon.HyraxSeldon"
