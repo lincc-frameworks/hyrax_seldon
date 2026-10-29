@@ -23,7 +23,7 @@ dependencies = [
     # hyrax_alerts is not on PyPI.
     "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@main",
     "fastavro",
-    "lightning == 2.5.2",
+    "lightning == 2.6.6",
     "numpy",
     "omegaconf",
     "pandas",
