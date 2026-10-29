@@ -28,8 +28,9 @@ dependencies = [
     "omegaconf",
     "pandas",
     "pyarrow",
-    # SELDON v1.2.0. SELDON declares no torch/lightning dependency.
-    "seldon_core @ git+https://github.com/skai-institute/seldon@v1.2.0",
+    # SELDON v1.2.0 plus a load_data that accepts a DataFrame. SELDON declares no
+    # torch/lightning dependency.
+    "seldon_core @ git+https://github.com/mtauraso/seldon@dataframe-lightcurve-path",
 ]
 
 [project.urls]

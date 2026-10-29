@@ -232,24 +232,16 @@ def preprocess(data_module, light_curves) -> dict[str, np.ndarray]:
         If a light curve has fewer than ``min_points`` points, which SELDON cannot encode, or a
         band the data module's band index map does not know.
     """
-    loader_module = _import("TAE.datasets.lightcurve_dataloader2")
     preprocessor_module = _import("TAE.datasets.lightcurve_preprocessor")
     collate = _import("TAE.datasets.lightcurve_dataset").enhanced_collate_fn
     import torch
-
-    # SELDON's loader reads parquet files and requires a class column.
-    frame = light_curves.assign(
-        SNID=np.arange(len(light_curves)), **{"class": loader_module.default_values["class"]}
-    )
-    parquet = io.BytesIO()
-    frame.to_parquet(parquet)
 
     min_points = data_module.min_points
     rng_state = np.random.get_state()
     samples, too_short = [], []
     try:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            data_module.lightcurve_path = [parquet]
+            data_module.lightcurve_path = light_curves
             # load_data drops light curves with fewer than min_points detections; keep them all.
             data_module.min_points = 0
             try:
