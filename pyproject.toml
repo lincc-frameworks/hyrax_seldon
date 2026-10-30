@@ -18,8 +18,8 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.12"
 dependencies = [
-    # HyraxSeldon.prepare_inputs returns a dict, which needs hyrax after v0.13 (#1078).
-    "hyrax @ git+https://github.com/lincc-frameworks/hyrax@main",
+    # HyraxSeldon.prepare_inputs returns a dict, which needs hyrax 0.13.1 or later.
+    "hyrax>=0.13.1",
     # hyrax_alerts is not on PyPI.
     "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@main",
     "fastavro",
