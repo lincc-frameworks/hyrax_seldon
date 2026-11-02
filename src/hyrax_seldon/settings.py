@@ -110,11 +110,6 @@ class SeldonSettings:
     #: curves for the model; see :func:`hyrax_seldon._seldon.preprocess`.
     data_module: object = field(repr=False, compare=False)
     compile: bool
-    time_field: str
-    flux_field: str
-    flux_err_field: str
-    band_field: str
-    photflag_field: str
 
     # From the run config's dataset.config
     min_points: int
@@ -179,11 +174,6 @@ class SeldonSettings:
             run_config=run_config,
             data_module=data_module,
             compile=bool(model_config["compile"]),
-            time_field=str(model_config["time_field"]),
-            flux_field=str(model_config["flux_field"]),
-            flux_err_field=str(model_config["flux_err_field"]),
-            band_field=str(model_config["band_field"]),
-            photflag_field=str(model_config["photflag_field"]),
             min_points=_positive_int("dataset.config.min_points", data_module.min_points),
             class_map={str(name): int(index) for name, index in dataset_config["class_map"].items()},
         )

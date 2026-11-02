@@ -37,12 +37,12 @@ def test_output_shapes_and_dtypes(seldon_config):
     assert {key: (value.shape, value.dtype) for key, value in out.items()} == expected
 
 
-def test_light_curve_frame_removes_padding(settings):
+def test_light_curve_frame_removes_padding():
     """Each row holds its own points, unpadded, in SELDON's parquet columns."""
     rng = np.random.default_rng(3)
     light_curves = [random_light_curve(rng, 40), random_light_curve(rng, 90)]
 
-    frame = HyraxSeldon.light_curve_frame(collate_light_curves(light_curves), settings)
+    frame = HyraxSeldon.light_curve_frame(collate_light_curves(light_curves))
 
     assert list(frame.columns) == ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
     for row, light_curve in enumerate(light_curves):
@@ -118,7 +118,7 @@ def test_unknown_band_rejected(seldon_config):
 
 
 def test_missing_field_reported(seldon_config):
-    """A batch missing a configured field names it."""
+    """A batch missing a light-curve field names it."""
     rng = np.random.default_rng(9)
     batch = collate_light_curves([random_light_curve(rng, 40)])
     del batch["photflag"]

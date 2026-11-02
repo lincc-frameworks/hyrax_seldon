@@ -41,6 +41,16 @@ SELDON_CONFIG_FILENAME = "seldon_config.yaml"
 #: Name of the batch group the light-curve fields are read from.
 DATA_GROUP = "data"
 
+#: SELDON parquet column -> the per-point field of the ``"data"`` group it is read from. A
+#: ``<field>_mask`` alongside a field marks which entries are real points rather than padding.
+LIGHT_CURVE_COLUMNS = {
+    "MJD": "time",
+    "FLUXCAL": "flux",  # ELAsTiCC FLUXCAL scale (zero point 27.5)
+    "FLUXCALERR": "flux_err",
+    "BAND": "band",  # band name, e.g. "u".."y"
+    "PHOTFLAG": "photflag",  # ELAsTiCC PHOTFLAG: 4096 marks a detection, 1024 saturation
+}
+
 #: The entries of SELDON's prepared batch that are passed on to the model.
 MODEL_INPUTS = (
     "x_input",
@@ -139,7 +149,7 @@ class HyraxSeldon(nn.Module):
         return results
 
     @staticmethod
-    def light_curve_frame(data: dict, settings: SeldonSettings) -> pd.DataFrame:
+    def light_curve_frame(data: dict) -> pd.DataFrame:
         """Remove a batch's padding, giving one row per light curve in SELDON's parquet schema.
 
         Parameters
@@ -147,30 +157,21 @@ class HyraxSeldon(nn.Module):
         data : dict
             The batch's ``"data"`` group: per-point fields of shape ``(batch, length)``. Entries
             where any field's ``<field>_mask`` is false are padding.
-        settings : SeldonSettings
-            Names the fields.
 
         Returns
         -------
         pandas.DataFrame
             Per-point list columns ``MJD``, ``FLUXCAL``, ``FLUXCALERR``, ``BAND`` and ``PHOTFLAG``.
         """
-        fields = {
-            "MJD": settings.time_field,
-            "FLUXCAL": settings.flux_field,
-            "FLUXCALERR": settings.flux_err_field,
-            "BAND": settings.band_field,
-            "PHOTFLAG": settings.photflag_field,
-        }
-        missing = [name for name in fields.values() if name not in data]
+        missing = [name for name in LIGHT_CURVE_COLUMNS.values() if name not in data]
         if missing:
             raise RuntimeError(
                 f"HyraxSeldon could not find the field(s) {missing} in the batch. Available fields: "
-                f"{sorted(data)}. Set time_field / flux_field / flux_err_field / band_field / "
-                "photflag_field in [model.HyraxSeldon] and list them in the data request's 'fields'."
+                f"{sorted(data)}. List {list(LIGHT_CURVE_COLUMNS.values())} in the data request's "
+                "'fields'."
             )
 
-        columns = {column: np.asarray(data[name]) for column, name in fields.items()}
+        columns = {column: np.asarray(data[name]) for column, name in LIGHT_CURVE_COLUMNS.items()}
         shapes = {values.shape for values in columns.values()}
         if len(shapes) > 1 or columns["MJD"].ndim != 2:
             raise RuntimeError(
@@ -179,7 +180,7 @@ class HyraxSeldon(nn.Module):
             )
 
         valid = np.ones(columns["MJD"].shape, dtype=bool)
-        for name in fields.values():
+        for name in LIGHT_CURVE_COLUMNS.values():
             mask = data.get(f"{name}_mask")
             if mask is not None:
                 valid &= np.asarray(mask).astype(bool)
@@ -199,7 +200,7 @@ class HyraxSeldon(nn.Module):
         ----------
         data_dict : dict
             The collated batch, with a ``"data"`` group holding the per-point light-curve
-            fields named in ``[model.HyraxSeldon]``, padded per row, each optionally with a
+            fields of :data:`LIGHT_CURVE_COLUMNS`, padded per row, each optionally with a
             ``<field>_mask``.
 
         Returns
@@ -235,7 +236,7 @@ class HyraxSeldon(nn.Module):
                 f"'{DATA_GROUP}' in [data_request]."
             )
         settings = SeldonSettings.from_config(get_context()["config"])
-        light_curves = HyraxSeldon.light_curve_frame(data_dict[DATA_GROUP], settings)
+        light_curves = HyraxSeldon.light_curve_frame(data_dict[DATA_GROUP])
         batch = _seldon.preprocess(settings.data_module, light_curves)
         return {key: batch[key] for key in MODEL_INPUTS}
 
