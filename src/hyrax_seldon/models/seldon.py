@@ -12,8 +12,9 @@ model as ``model``, so the checkpoint's weights load into ``HyraxSeldon`` key fo
 Saving writes the run config next to the weights as ``seldon_config.yaml``, so weights saved
 by Hyrax keep the settings they were trained with.
 
-Datasets emit raw per-point values in the terms of SELDON's parquet files: MJD, flux on the
-ELAsTiCC ``FLUXCAL`` scale, flux error, band name, and ELAsTiCC ``PHOTFLAG``.
+Datasets emit raw per-point values as the list columns of SELDON's ELAsTiCC parquet files,
+under the same names and in the same terms (see
+:data:`hyrax_seldon.datasets.collate.LIGHT_CURVE_FIELDS`).
 :meth:`HyraxSeldon.prepare_inputs` removes the padding Hyrax's collation added and hands the
 light curves to SELDON, which prepares them with the run's own data module and preprocessor,
 as it prepares new data (see :func:`hyrax_seldon._seldon.preprocess`).
@@ -31,6 +32,7 @@ import torch.nn as nn
 from hyrax.models.model_registry import hyrax_model
 
 from hyrax_seldon import _seldon
+from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS
 from hyrax_seldon.settings import SeldonSettings
 
 logger = logging.getLogger(__name__)
@@ -139,38 +141,29 @@ class HyraxSeldon(nn.Module):
         return results
 
     @staticmethod
-    def light_curve_frame(data: dict, settings: SeldonSettings) -> pd.DataFrame:
+    def light_curve_frame(data: dict) -> pd.DataFrame:
         """Remove a batch's padding, giving one row per light curve in SELDON's parquet schema.
 
         Parameters
         ----------
         data : dict
-            The batch's ``"data"`` group: per-point fields of shape ``(batch, length)``. Entries
-            where any field's ``<field>_mask`` is false are padding.
-        settings : SeldonSettings
-            Names the fields.
+            The batch's ``"data"`` group: the per-point fields of
+            :data:`~hyrax_seldon.datasets.collate.LIGHT_CURVE_FIELDS`, of shape
+            ``(batch, length)``. Entries where any field's ``<field>_mask`` is false are padding.
 
         Returns
         -------
         pandas.DataFrame
             Per-point list columns ``MJD``, ``FLUXCAL``, ``FLUXCALERR``, ``BAND`` and ``PHOTFLAG``.
         """
-        fields = {
-            "MJD": settings.time_field,
-            "FLUXCAL": settings.flux_field,
-            "FLUXCALERR": settings.flux_err_field,
-            "BAND": settings.band_field,
-            "PHOTFLAG": settings.photflag_field,
-        }
-        missing = [name for name in fields.values() if name not in data]
+        missing = [name for name in LIGHT_CURVE_FIELDS if name not in data]
         if missing:
             raise RuntimeError(
                 f"HyraxSeldon could not find the field(s) {missing} in the batch. Available fields: "
-                f"{sorted(data)}. Set time_field / flux_field / flux_err_field / band_field / "
-                "photflag_field in [model.HyraxSeldon] and list them in the data request's 'fields'."
+                f"{sorted(data)}. List {list(LIGHT_CURVE_FIELDS)} in the data request's 'fields'."
             )
 
-        columns = {column: np.asarray(data[name]) for column, name in fields.items()}
+        columns = {name: np.asarray(data[name]) for name in LIGHT_CURVE_FIELDS}
         shapes = {values.shape for values in columns.values()}
         if len(shapes) > 1 or columns["MJD"].ndim != 2:
             raise RuntimeError(
@@ -179,7 +172,7 @@ class HyraxSeldon(nn.Module):
             )
 
         valid = np.ones(columns["MJD"].shape, dtype=bool)
-        for name in fields.values():
+        for name in LIGHT_CURVE_FIELDS:
             mask = data.get(f"{name}_mask")
             if mask is not None:
                 valid &= np.asarray(mask).astype(bool)
@@ -199,8 +192,8 @@ class HyraxSeldon(nn.Module):
         ----------
         data_dict : dict
             The collated batch, with a ``"data"`` group holding the per-point light-curve
-            fields named in ``[model.HyraxSeldon]``, padded per row, each optionally with a
-            ``<field>_mask``.
+            fields of :data:`~hyrax_seldon.datasets.collate.LIGHT_CURVE_FIELDS`, padded per row,
+            each optionally with a ``<field>_mask``.
 
         Returns
         -------
@@ -235,7 +228,7 @@ class HyraxSeldon(nn.Module):
                 f"'{DATA_GROUP}' in [data_request]."
             )
         settings = SeldonSettings.from_config(get_context()["config"])
-        light_curves = HyraxSeldon.light_curve_frame(data_dict[DATA_GROUP], settings)
+        light_curves = HyraxSeldon.light_curve_frame(data_dict[DATA_GROUP])
         batch = _seldon.preprocess(settings.data_module, light_curves)
         return {key: batch[key] for key in MODEL_INPUTS}
 

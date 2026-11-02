@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 from babamul_fixtures import (
@@ -17,8 +19,9 @@ from hyrax_seldon.consumers.babamul_lsst import (
     BabamulLsstConsumer,
     merge_photometry,
 )
+from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS
 
-FIELDS = ["time", "flux", "flux_err", "band", "photflag"]
+FIELDS = list(LIGHT_CURVE_FIELDS)
 
 
 class FakeMessage:
@@ -135,18 +138,18 @@ def test_getters(consumer):
     assert consumer.get_candid(alert) == 42
     assert consumer.get_objectId(alert) == "lsst-obj-42"
     np.testing.assert_array_equal(
-        consumer.get_time(alert), np.array([0.0, 1.0, 2.0, 3.0]) + 2461000.5 - MJD_OFFSET
+        consumer.get_MJD(alert), np.array([0.0, 1.0, 2.0, 3.0]) + 2461000.5 - MJD_OFFSET
     )
-    assert consumer.get_time(alert).dtype == np.float64
+    assert consumer.get_MJD(alert).dtype == np.float64
     np.testing.assert_allclose(
-        consumer.get_flux(alert), np.array([10.0, 1000.0, -30.0, 2000.0]) * 0.027542, rtol=1e-4
+        consumer.get_FLUXCAL(alert), np.array([10.0, 1000.0, -30.0, 2000.0]) * 0.027542, rtol=1e-4
     )
     np.testing.assert_allclose(
-        consumer.get_flux_err(alert), np.array([40.0, 50.0, 80.0, 60.0]) * NJY_TO_FLUXCAL
+        consumer.get_FLUXCALERR(alert), np.array([40.0, 50.0, 80.0, 60.0]) * NJY_TO_FLUXCAL
     )
-    assert consumer.get_band(alert).tolist() == ["u", "g", "y", "r"]
-    assert consumer.get_photflag(alert).tolist() == [0, DETECTION_PHOTFLAG, 0, DETECTION_PHOTFLAG]
-    assert consumer.get_photflag(alert).dtype == np.int64
+    assert consumer.get_BAND(alert).tolist() == ["u", "g", "y", "r"]
+    assert consumer.get_PHOTFLAG(alert).tolist() == [0, DETECTION_PHOTFLAG, 0, DETECTION_PHOTFLAG]
+    assert consumer.get_PHOTFLAG(alert).dtype == np.int64
 
 
 def test_realistic_alert(consumer):
@@ -154,13 +157,13 @@ def test_realistic_alert(consumer):
     alert = decode_alert(encode_alert(make_light_curve_alert(np.random.default_rng(3), 7, "lsst-obj-7")))
     alert_mjd = alert["candidate"]["jd"] - MJD_OFFSET
 
-    time = consumer.get_time(alert)
-    assert set(consumer.get_band(alert)) == set(LSST_BANDS)
+    time = consumer.get_MJD(alert)
+    assert set(consumer.get_BAND(alert)) == set(LSST_BANDS)
     assert np.all(np.diff(time) >= 0)
     assert time.max() == alert_mjd
-    assert np.isfinite(consumer.get_flux(alert)).all()
+    assert np.isfinite(consumer.get_FLUXCAL(alert)).all()
     n_detections = sum(p["jd"] <= alert["candidate"]["jd"] for p in alert["prv_candidates"])
-    assert (consumer.get_photflag(alert) == DETECTION_PHOTFLAG).sum() == n_detections
+    assert (consumer.get_PHOTFLAG(alert) == DETECTION_PHOTFLAG).sum() == n_detections
 
 
 def test_empty_forced_history(consumer):
@@ -170,8 +173,8 @@ def test_empty_forced_history(consumer):
     )
 
     assert alert["fp_hists"] == []
-    assert (consumer.get_photflag(alert) == DETECTION_PHOTFLAG).all()
-    assert len(consumer.get_time(alert)) == sum(
+    assert (consumer.get_PHOTFLAG(alert) == DETECTION_PHOTFLAG).all()
+    assert len(consumer.get_MJD(alert)) == sum(
         p["jd"] <= alert["candidate"]["jd"] for p in alert["prv_candidates"]
     )
 
@@ -222,7 +225,7 @@ batch_flush_timeout = 0.0
 dataset_class = "test_babamul_lsst.FakeBabamulLsstConsumer"
 data_location = "kafka://localhost:9092"
 primary_id_field = "candid"
-fields = ["time", "flux", "flux_err", "band", "photflag"]
+fields = {json.dumps(FIELDS)}
 
 [model]
 name = "hyrax_seldon.models.seldon.HyraxSeldon"
