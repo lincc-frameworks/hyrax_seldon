@@ -9,7 +9,7 @@ include the alert's own) and ``fp_hists`` (forced photometry). Times are Julian 
 import numpy as np
 from hyrax_alerts.consumers.babamul_consumer import BabamulConsumer
 
-from hyrax_seldon.collate import LightCurveCollationMixin
+from hyrax_seldon.datasets.collate import LightCurveCollationMixin
 
 #: JD - MJD.
 MJD_OFFSET = 2400000.5

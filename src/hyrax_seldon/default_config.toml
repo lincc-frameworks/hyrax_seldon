@@ -16,10 +16,6 @@ flux_err_field = "flux_err"
 band_field = "band"          # band name, e.g. "u".."y"
 photflag_field = "photflag"  # ELAsTiCC PHOTFLAG: 4096 marks a detection, 1024 saturation
 
-[data_set.ElasticcParquetDataset]
-# Extra keyword arguments passed directly to pandas.read_parquet.
-[data_set.ElasticcParquetDataset.read_kwargs]
-
 # hyrax_alerts settings that BabamulLsstConsumer and process_alerts read. hyrax_alerts' own
 # defaults are only merged when a config names one of its classes, so they are repeated here.
 [hyrax_alerts.consumer]
