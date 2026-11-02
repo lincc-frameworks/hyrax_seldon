@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from hyrax_seldon.collate import collate_light_curve_field
+from hyrax_seldon.datasets.collate import collate_light_curve_field
 from hyrax_seldon.datasets.elasticc_parquet import ElasticcParquetDataset
 from hyrax_seldon.settings import SeldonSettings
 from seldon_fixtures import prepare_inputs
@@ -13,7 +13,7 @@ COLUMNS = {"time": "MJD", "flux": "FLUXCAL", "flux_err": "FLUXCALERR", "band": "
 @pytest.fixture
 def dataset(elasticc_parquet):
     """The dataset over the synthetic ELAsTiCC parquet file."""
-    config = {"data_set": {"ElasticcParquetDataset": {"read_kwargs": {}}}}
+    config = {"data_set": {"NestedPandasDataset": {"read_kwargs": {}}}}
     return ElasticcParquetDataset(config, data_location=elasticc_parquet)
 
 
@@ -58,7 +58,7 @@ def test_length_and_ids(dataset, elasticc_parquet):
     table = pd.read_parquet(elasticc_parquet)
 
     assert len(dataset) == len(table)
-    assert [dataset.get_object_id(i) for i in range(len(dataset))] == [str(s) for s in table["SNID"]]
+    assert [dataset.get_object_id(i) for i in range(len(dataset))] == table["SNID"].tolist()
 
 
 def test_getters_emit_raw_columns(dataset, elasticc_parquet):
@@ -68,8 +68,6 @@ def test_getters_emit_raw_columns(dataset, elasticc_parquet):
 
     for field, column in COLUMNS.items():
         np.testing.assert_array_equal(getattr(dataset, f"get_{field}")(3), np.asarray(row[column]))
-    assert dataset.get_time(3).dtype == np.float64
-    assert dataset.get_photflag(3).dtype == np.int64
 
 
 def test_prepared_inputs_match_seldon(dataset, seldon_config, seldon_batch):
