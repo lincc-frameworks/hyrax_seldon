@@ -192,8 +192,8 @@ class HyraxSeldon(nn.Module):
         ----------
         data_dict : dict
             The collated batch, with a ``"data"`` group holding the per-point light-curve
-            fields of :data:`~hyrax_seldon.datasets.collate.LIGHT_CURVE_FIELDS`, padded per row, each optionally with a
-            ``<field>_mask``.
+            fields of :data:`~hyrax_seldon.datasets.collate.LIGHT_CURVE_FIELDS`, padded per row,
+            each optionally with a ``<field>_mask``.
 
         Returns
         -------

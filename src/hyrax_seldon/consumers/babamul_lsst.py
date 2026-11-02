@@ -68,9 +68,9 @@ class BabamulLsstConsumer(LightCurveCollationMixin, BabamulConsumer):
     Fields: ``candid`` (the primary id), ``objectId``, and per point, in the terms of SELDON's
     ELAsTiCC parquet files, ``MJD``, ``FLUXCAL`` and ``FLUXCALERR`` (nJy converted to the
     ELAsTiCC ``FLUXCAL`` scale), ``BAND`` (``u``..``y``) and ``PHOTFLAG``
-    (:data:`DETECTION_PHOTFLAG` for DIA detections, 0 for forced-only points). See :func:`merge_photometry` for how the light
-    curve is assembled. The per-point fields collate padded to the longest light curve in the
-    batch, each with a ``<field>_mask``.
+    (:data:`DETECTION_PHOTFLAG` for DIA detections, 0 for forced-only points). See
+    :func:`merge_photometry` for how the light curve is assembled. The per-point fields collate
+    padded to the longest light curve in the batch, each with a ``<field>_mask``.
 
     Subscribe to every Babamul LSST topic with
     ``[data_set.KafkaStreamDataset] topics = "^babamul\\\\.lsst\\\\..*"``. ZTF matches in
