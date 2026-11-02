@@ -28,11 +28,10 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-import torch.nn.functional as F  # noqa: N812
 from hyrax.models.model_registry import hyrax_model
 
 from hyrax_seldon import _seldon
-from hyrax_seldon.settings import LSST_BANDS, SeldonSettings
+from hyrax_seldon.settings import SeldonSettings
 
 logger = logging.getLogger(__name__)
 
@@ -96,67 +95,6 @@ class HyraxSeldon(nn.Module):
             ".ckpt, and [model.HyraxSeldon].seldon_config at the run's hparams.yaml."
         )
 
-    def decode(self, decoder_inputs, t, band_idx):
-        """Evaluate SELDON's decoder and flux-error network, exactly as ``forward()`` does.
-
-        Parameters
-        ----------
-        decoder_inputs : torch.Tensor
-            ``(B, latent)`` decoder inputs from ``forward()``.
-        t : torch.Tensor
-            ``(B, T, 1)`` normalized query times.
-        band_idx : torch.Tensor
-            ``(B, T, 1)`` SELDON band indices.
-
-        Returns
-        -------
-        tuple[torch.Tensor, torch.Tensor | None]
-            ``(reconstructed, error)``, each ``(B, T, 1)``; ``error`` is ``None`` if the model
-            has no flux-error network.
-        """
-        model = self.model
-        reconstructed, _ = model.decoder(decoder_inputs, t, band_idx, return_parameters=True)
-        if model.uq_net is None:
-            return reconstructed, None
-        error = model.uq_net(
-            torch.cat(
-                [
-                    reconstructed,
-                    model.decoder.band_emb(band_idx[:, :, 0]),
-                    decoder_inputs[:, None, :].expand(-1, reconstructed.shape[1], -1),
-                    t,
-                ],
-                dim=-1,
-            )
-        )
-        return reconstructed, F.softplus(error)
-
-    def _reconstruction_grid(self, decoder_inputs, time_full):
-        """Evaluate the decoder on a fixed grid of times for each LSST band."""
-        settings = self.settings
-        n_batch = decoder_inputs.shape[0]
-        n_bands, n_grid = len(LSST_BANDS), settings.grid_points
-        device = decoder_inputs.device
-
-        offsets = torch.linspace(*settings.grid_horizon, n_grid, device=device, dtype=time_full.dtype)
-        # time_full is edge-padded, so its last entry is its latest observation.
-        t_last = time_full[:, -1, 0]
-        grid_t = t_last[:, None, None] + offsets[None, None, :] / settings.t_max
-        grid_t = grid_t.expand(n_batch, n_bands, n_grid).reshape(n_batch, n_bands * n_grid, 1)
-
-        bands = torch.tensor([settings.band_index_map[band] for band in LSST_BANDS], device=device)
-        grid_bands = bands[:, None].expand(n_bands, n_grid).reshape(1, n_bands * n_grid, 1)
-        grid_bands = grid_bands.expand(n_batch, -1, -1)
-
-        reconstructed, error = self.decode(decoder_inputs, grid_t, grid_bands)
-        results = {
-            "grid_time": offsets[None, :].expand(n_batch, n_grid),
-            "grid_reconstructed": reconstructed.reshape(n_batch, n_bands, n_grid),
-        }
-        if error is not None:
-            results["grid_error"] = error.reshape(n_batch, n_bands, n_grid)
-        return results
-
     def infer_batch(self, batch):
         """Run SELDON's ``forward()`` and return all of its outputs.
 
@@ -178,9 +116,6 @@ class HyraxSeldon(nn.Module):
               longer than ``max_length`` gets SELDON's window of ``max_length`` points.
             - ``short_lightcurve`` ``(B,)``: the light curve has fewer than ``min_points``
               detections. SELDON's loader excludes such light curves from training.
-            - with ``reconstruction_grid`` on: ``grid_time`` ``(B, grid_points)`` in days
-              relative to the last observation in ``pad_mask_full``, and ``grid_reconstructed`` /
-              ``grid_error`` ``(B, 6, grid_points)`` for the bands u, g, r, i, z, y.
         """
         out = self.forward(
             batch["x_input"],
@@ -201,10 +136,6 @@ class HyraxSeldon(nn.Module):
 
         results["pad_mask_full"] = batch["pad_mask_full"]
         results["short_lightcurve"] = batch["n_detections"] < self.settings.min_points
-
-        if self.settings.reconstruction_grid:
-            results.update(self._reconstruction_grid(out["decoder_inputs"], batch["time_full"]))
-
         return results
 
     @staticmethod

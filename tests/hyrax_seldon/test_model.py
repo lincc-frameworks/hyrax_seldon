@@ -227,7 +227,6 @@ def test_output_keys_and_fixed_shapes(model, batch):
     assert {key: tuple(value.shape[1:]) for key, value in out.items()} == expected
     assert all(value.shape[0] == 4 for value in out.values())
     assert "encoding_sequence" not in out
-    assert not any(key.startswith("grid_") for key in out)
 
 
 def test_short_lightcurve_flag(model, batch):
@@ -246,16 +245,6 @@ def test_pad_mask_full_passed_through(model, batch):
 
     assert torch.equal(out["pad_mask_full"], batch["pad_mask_full"])
     assert out["pad_mask_full"].sum(dim=1).tolist() == [150, 512, 70, 40]
-
-
-def test_decode_reproduces_forward(model, batch):
-    """decode() evaluates the decoder and error network exactly as forward() does."""
-    with torch.no_grad():
-        out = model.infer_batch(batch)
-        reconstructed, error = model.decode(out["decoder_inputs"], batch["time_full"], batch["band_idx_full"])
-
-    assert torch.equal(reconstructed, out["reconstructed"])
-    assert torch.equal(error, out["error"])
 
 
 def test_save_load_round_trip(model, hyrax_config, batch, tmp_path):
@@ -325,53 +314,3 @@ def test_compile_neutralized_unless_requested(hyrax_config):
     hyrax_config["model"]["HyraxSeldon"]["compile"] = True
     compiled = HyraxSeldon(config=hyrax_config)
     assert any(module._compiled_call_impl is not None for module in compiled.modules())
-
-
-@pytest.fixture
-def grid_model(hyrax_config, seldon_checkpoint):
-    """HyraxSeldon with a 3-point reconstruction grid at -10, 0 and +10 days."""
-    hyrax_config["model"]["HyraxSeldon"].update(
-        reconstruction_grid=True, grid_points=3, grid_horizon=[-10.0, 10.0]
-    )
-    model = HyraxSeldon(config=hyrax_config)
-    model.load(seldon_checkpoint)
-    return model.eval()
-
-
-def test_reconstruction_grid_shapes(grid_model, batch):
-    """Grid outputs are present with fixed shapes when the grid is on."""
-    with torch.no_grad():
-        out = grid_model.infer_batch(batch)
-
-    assert out["grid_time"].shape == (4, 3)
-    assert out["grid_reconstructed"].shape == (4, 6, 3)
-    assert out["grid_error"].shape == (4, 6, 3)
-    assert out["grid_time"][0].tolist() == [-10.0, 0.0, 10.0]
-    assert torch.isfinite(out["grid_reconstructed"]).all()
-
-
-def test_reconstruction_grid_values(grid_model, batch):
-    """The grid is the decoder at the last observation's time plus each offset, per LSST band."""
-    from hyrax_seldon.settings import LSST_BANDS
-
-    with torch.no_grad():
-        out = grid_model.infer_batch(batch)
-
-    settings = grid_model.settings
-    n_points = batch["pad_mask_full"].sum(dim=1)
-    for row in range(4):
-        last = int(n_points[row]) - 1
-        # At offset 0, the grid in the band of the last observation is the reconstruction there.
-        band = int(batch["band_idx_full"][row, last, 0])
-        band_row = [settings.band_index_map[b] for b in LSST_BANDS].index(band)
-        torch.testing.assert_close(
-            out["grid_reconstructed"][row, band_row, 1], out["reconstructed"][row, last, 0]
-        )
-        torch.testing.assert_close(out["grid_error"][row, band_row, 1], out["error"][row, last, 0])
-
-    # +10 days, in the r band, through decode() directly.
-    t = batch["time_full"][:, -1:, :] + 10.0 / settings.t_max
-    r_band = torch.full((4, 1, 1), settings.band_index_map["r"], device=t.device)
-    with torch.no_grad():
-        reconstructed, _ = grid_model.decode(out["decoder_inputs"], t, r_band)
-    torch.testing.assert_close(out["grid_reconstructed"][:, LSST_BANDS.index("r"), 2], reconstructed[:, 0, 0])

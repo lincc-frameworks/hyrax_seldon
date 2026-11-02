@@ -13,9 +13,6 @@ from pathlib import Path
 
 from hyrax_seldon import _seldon
 
-#: The six LSST bands, in wavelength order.
-LSST_BANDS = ("u", "g", "r", "i", "z", "y")
-
 #: The SELDON data module whose preprocessing this port runs.
 SUPPORTED_DATA_MODULE = "FlexibleLightCurveDataLoader"
 
@@ -56,12 +53,6 @@ def _read_run_config(path: str, mtime_ns: int) -> dict:
 def _data_module(path: str, mtime_ns: int):
     """Build a run config's SELDON data module. Cached on the file's path and modification time."""
     return _seldon.build_data_module(_read_run_config(path, mtime_ns)["dataset"])
-
-
-def _number(key: str, value) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise NotSupportedError(key, value, "A number is required.")
-    return float(value)
 
 
 def _positive_int(key: str, value) -> int:
@@ -124,12 +115,8 @@ class SeldonSettings:
     flux_err_field: str
     band_field: str
     photflag_field: str
-    reconstruction_grid: bool
-    grid_points: int
-    grid_horizon: tuple[float, float]
 
     # From the run config's dataset.config
-    t_max: float
     min_points: int
     class_map: dict[str, int] = field(repr=False)
 
@@ -185,17 +172,6 @@ class SeldonSettings:
         run_config = _read_run_config(str(path), mtime_ns)
         _check_run_config(path, run_config)
 
-        grid_horizon = model_config["grid_horizon"]
-        if (
-            not isinstance(grid_horizon, list | tuple)
-            or len(grid_horizon) != 2
-            or not grid_horizon[0] < grid_horizon[1]
-        ):
-            raise ValueError(
-                "config['model']['HyraxSeldon']['grid_horizon'] must be [start, end] in days "
-                f"relative to the last observation, with start < end. Got {grid_horizon!r}."
-            )
-
         data_module = _data_module(str(path), mtime_ns)
         dataset_config = run_config["dataset"]["config"]
         return cls(
@@ -208,10 +184,6 @@ class SeldonSettings:
             flux_err_field=str(model_config["flux_err_field"]),
             band_field=str(model_config["band_field"]),
             photflag_field=str(model_config["photflag_field"]),
-            reconstruction_grid=bool(model_config["reconstruction_grid"]),
-            grid_points=_positive_int("model.HyraxSeldon.grid_points", model_config["grid_points"]),
-            grid_horizon=(float(grid_horizon[0]), float(grid_horizon[1])),
-            t_max=_number("dataset.config.flux_stats.t_max", dataset_config["flux_stats"]["t_max"]),
             min_points=_positive_int("dataset.config.min_points", data_module.min_points),
             class_map={str(name): int(index) for name, index in dataset_config["class_map"].items()},
         )

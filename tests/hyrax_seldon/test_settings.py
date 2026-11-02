@@ -1,8 +1,8 @@
 import pytest
 import yaml
 from hyrax_seldon import _seldon
-from hyrax_seldon.settings import LSST_BANDS, NotSupportedError, SeldonSettings
-from seldon_fixtures import TARGET_CONFIG
+from hyrax_seldon.settings import NotSupportedError, SeldonSettings
+from seldon_fixtures import LSST_BANDS, TARGET_CONFIG
 
 
 def _write_run_config(tmp_path, run_config_path, edit):
@@ -21,7 +21,6 @@ def test_reads_run_config(seldon_config):
     settings = SeldonSettings.from_config(seldon_config)
 
     assert settings.min_points == 32
-    assert settings.t_max == 20.0
     assert len(settings.class_names) == 10
     assert settings.model_params["name"] == "SELDONEnergyClassifierDictModel"
 
@@ -127,13 +126,6 @@ def test_unsupported_data_module_rejected(tmp_path, run_config_path, model_confi
     model_config["seldon_config"] = str(_write_run_config(tmp_path, run_config_path, edit))
     with pytest.raises(NotSupportedError, match="dataset.name = 'SNDataModuleParquet'"):
         SeldonSettings.from_config({"model": {"HyraxSeldon": model_config}})
-
-
-def test_bad_grid_horizon_rejected(seldon_config):
-    """grid_horizon must be [start, end] with start < end."""
-    seldon_config["model"]["HyraxSeldon"]["grid_horizon"] = [10.0, -10.0]
-    with pytest.raises(ValueError, match="grid_horizon"):
-        SeldonSettings.from_config(seldon_config)
 
 
 def test_run_config_without_band_weights_rejected(tmp_path, run_config_path, model_config):
