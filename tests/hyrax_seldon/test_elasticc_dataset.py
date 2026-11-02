@@ -6,8 +6,7 @@ from hyrax_seldon.datasets.elasticc_parquet import ElasticcParquetDataset
 from hyrax_seldon.settings import SeldonSettings
 from seldon_fixtures import prepare_inputs
 
-FIELDS = ["time", "flux", "flux_err", "band", "photflag"]
-COLUMNS = {"time": "MJD", "flux": "FLUXCAL", "flux_err": "FLUXCALERR", "band": "BAND", "photflag": "PHOTFLAG"}
+FIELDS = ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
 
 
 @pytest.fixture
@@ -58,7 +57,7 @@ def test_length_and_ids(dataset, elasticc_parquet):
     table = pd.read_parquet(elasticc_parquet)
 
     assert len(dataset) == len(table)
-    assert [dataset.get_object_id(i) for i in range(len(dataset))] == table["SNID"].tolist()
+    assert [dataset.get_SNID(i) for i in range(len(dataset))] == table["SNID"].tolist()
 
 
 def test_getters_emit_raw_columns(dataset, elasticc_parquet):
@@ -66,8 +65,8 @@ def test_getters_emit_raw_columns(dataset, elasticc_parquet):
     row = pd.read_parquet(elasticc_parquet).iloc[3]
     assert (np.asarray(row["PHOTFLAG"]) & 1024).any()
 
-    for field, column in COLUMNS.items():
-        np.testing.assert_array_equal(getattr(dataset, f"get_{field}")(3), np.asarray(row[column]))
+    for field in FIELDS:
+        np.testing.assert_array_equal(getattr(dataset, f"get_{field}")(3), np.asarray(row[field]))
 
 
 def test_prepared_inputs_match_seldon(dataset, seldon_config, seldon_batch):
@@ -85,7 +84,7 @@ def test_prepared_inputs_match_seldon(dataset, seldon_config, seldon_batch):
 def test_collate_pads_with_masks(dataset):
     """Per-point fields collate padded to the longest light curve, with a mask."""
     samples = [{field: getattr(dataset, f"get_{field}")(i) for field in FIELDS} for i in (0, 1)]
-    lengths = [len(sample["time"]) for sample in samples]
+    lengths = [len(sample["MJD"]) for sample in samples]
 
     for field in FIELDS:
         collated = getattr(dataset, f"collate_{field}")(samples)
@@ -97,15 +96,15 @@ def test_collate_pads_with_masks(dataset):
 
 def test_collate_padding_values():
     """Padding is zero or an empty string, never a value that looks like data."""
-    out = collate_light_curve_field([{"band": np.array(["u"])}, {"band": np.array(["g", "r"])}], "band")
-    assert out["band"].tolist() == [["u", ""], ["g", "r"]]
-    assert out["band_mask"].tolist() == [[True, False], [True, True]]
+    out = collate_light_curve_field([{"BAND": np.array(["u"])}, {"BAND": np.array(["g", "r"])}], "BAND")
+    assert out["BAND"].tolist() == [["u", ""], ["g", "r"]]
+    assert out["BAND_mask"].tolist() == [[True, False], [True, True]]
 
     out = collate_light_curve_field(
-        [{"photflag": np.array([4096])}, {"photflag": np.array([], dtype=np.int64)}], "photflag"
+        [{"PHOTFLAG": np.array([4096])}, {"PHOTFLAG": np.array([], dtype=np.int64)}], "PHOTFLAG"
     )
-    assert out["photflag"].tolist() == [[4096], [0]]
-    assert out["photflag_mask"].tolist() == [[True], [False]]
+    assert out["PHOTFLAG"].tolist() == [[4096], [0]]
+    assert out["PHOTFLAG_mask"].tolist() == [[True], [False]]
 
 
 def _write_infer_config(tmp_path, parquet, weights):
@@ -130,8 +129,8 @@ model_weights_file = "{weights}"
 [data_request.infer.data]
 dataset_class = "hyrax_seldon.datasets.elasticc_parquet.ElasticcParquetDataset"
 data_location = "{parquet}"
-primary_id_field = "object_id"
-fields = ["time", "flux", "flux_err", "band", "photflag"]
+primary_id_field = "SNID"
+fields = ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
 """
     )
     return config_file

@@ -55,7 +55,7 @@ def test_masked_points_dropped(seldon_config):
     rng = np.random.default_rng(5)
     light_curve = random_light_curve(rng, 50)
     batch = collate_light_curves([light_curve])
-    batch["flux_err_mask"][0, 5] = False
+    batch["FLUXCALERR_mask"][0, 5] = False
 
     keep = np.ones(50, bool)
     keep[5] = False
@@ -121,9 +121,9 @@ def test_missing_field_reported(seldon_config):
     """A batch missing a light-curve field names it."""
     rng = np.random.default_rng(9)
     batch = collate_light_curves([random_light_curve(rng, 40)])
-    del batch["photflag"]
+    del batch["PHOTFLAG"]
 
-    with pytest.raises(RuntimeError, match="photflag"):
+    with pytest.raises(RuntimeError, match="PHOTFLAG"):
         prepare_inputs(batch, seldon_config)
 
 

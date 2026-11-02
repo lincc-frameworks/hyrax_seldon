@@ -65,10 +65,10 @@ def merge_photometry(alert: dict) -> dict[str, np.ndarray]:
 class BabamulLsstConsumer(LightCurveCollationMixin, BabamulConsumer):
     """Babamul LSST alerts as raw per-point light curves, for ``HyraxSeldon``.
 
-    Fields: ``candid`` (the primary id), ``objectId``, and per point ``time`` (MJD),
-    ``flux`` and ``flux_err`` (nJy converted to the ELAsTiCC ``FLUXCAL`` scale), ``band``
-    (``u``..``y``) and ``photflag`` (ELAsTiCC ``PHOTFLAG``: :data:`DETECTION_PHOTFLAG` for DIA
-    detections, 0 for forced-only points). See :func:`merge_photometry` for how the light
+    Fields: ``candid`` (the primary id), ``objectId``, and per point, in the terms of SELDON's
+    ELAsTiCC parquet files, ``MJD``, ``FLUXCAL`` and ``FLUXCALERR`` (nJy converted to the
+    ELAsTiCC ``FLUXCAL`` scale), ``BAND`` (``u``..``y``) and ``PHOTFLAG``
+    (:data:`DETECTION_PHOTFLAG` for DIA detections, 0 for forced-only points). See :func:`merge_photometry` for how the light
     curve is assembled. The per-point fields collate padded to the longest light curve in the
     batch, each with a ``<field>_mask``.
 
@@ -81,22 +81,22 @@ class BabamulLsstConsumer(LightCurveCollationMixin, BabamulConsumer):
         """The LSST object id."""
         return msg["objectId"]
 
-    def get_time(self, msg):
+    def get_MJD(self, msg):  # noqa: N802
         """MJD of each point."""
         return merge_photometry(msg)["jd"] - MJD_OFFSET
 
-    def get_flux(self, msg):
+    def get_FLUXCAL(self, msg):  # noqa: N802
         """``psfFlux`` of each point, on the ELAsTiCC ``FLUXCAL`` scale."""
         return merge_photometry(msg)["flux"] * NJY_TO_FLUXCAL
 
-    def get_flux_err(self, msg):
+    def get_FLUXCALERR(self, msg):  # noqa: N802
         """``psfFluxErr`` of each point, on the ELAsTiCC ``FLUXCAL`` scale."""
         return merge_photometry(msg)["flux_err"] * NJY_TO_FLUXCAL
 
-    def get_band(self, msg):
+    def get_BAND(self, msg):  # noqa: N802
         """Band of each point."""
         return merge_photometry(msg)["band"]
 
-    def get_photflag(self, msg):
+    def get_PHOTFLAG(self, msg):  # noqa: N802
         """ELAsTiCC ``PHOTFLAG`` of each point: a detection for DIA detections, 0 for forced-only points."""
         return np.where(merge_photometry(msg)["detected"], DETECTION_PHOTFLAG, 0).astype(np.int64)

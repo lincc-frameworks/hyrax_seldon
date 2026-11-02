@@ -121,11 +121,11 @@ def collate_light_curves(light_curves):
     length = max(len(lc[0]) for lc in light_curves)
     batch = {}
     for name, index, pad in [
-        ("time", 0, 0.0),
-        ("flux", 1, 0.0),
-        ("flux_err", 2, 0.0),
-        ("band", 3, ""),
-        ("photflag", 4, 0),
+        ("MJD", 0, 0.0),
+        ("FLUXCAL", 1, 0.0),
+        ("FLUXCALERR", 2, 0.0),
+        ("BAND", 3, ""),
+        ("PHOTFLAG", 4, 0),
     ]:
         values = [lc[index] for lc in light_curves]
         padded = np.full((len(values), length), pad, dtype=np.asarray(values[0]).dtype)
