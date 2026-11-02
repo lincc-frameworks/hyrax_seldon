@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS, collate_light_curve_field
 
 TARGET_CONFIG = "SELDON_2.0_S_E_UQ_C_with_transmission_delta_refactored.yaml"
 CLUSTER_DATA_DIR = "/projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/"
@@ -117,24 +118,15 @@ def random_light_curve(rng, n_points, detected_fraction=0.9):
 
 
 def collate_light_curves(light_curves):
-    """Collate raw light curves the way hyrax_seldon's datasets do: padded, with masks."""
-    length = max(len(lc[0]) for lc in light_curves)
+    """Collate raw light curves the way hyrax_seldon's datasets do: padded, with masks.
+
+    Each light curve is a tuple of per-point arrays in :data:`LIGHT_CURVE_FIELDS` order, as
+    :func:`random_light_curve` returns.
+    """
+    samples = [dict(zip(LIGHT_CURVE_FIELDS, light_curve, strict=True)) for light_curve in light_curves]
     batch = {}
-    for name, index, pad in [
-        ("MJD", 0, 0.0),
-        ("FLUXCAL", 1, 0.0),
-        ("FLUXCALERR", 2, 0.0),
-        ("BAND", 3, ""),
-        ("PHOTFLAG", 4, 0),
-    ]:
-        values = [lc[index] for lc in light_curves]
-        padded = np.full((len(values), length), pad, dtype=np.asarray(values[0]).dtype)
-        mask = np.zeros((len(values), length), dtype=bool)
-        for row, value in enumerate(values):
-            padded[row, : len(value)] = value
-            mask[row, : len(value)] = True
-        batch[name] = padded
-        batch[f"{name}_mask"] = mask
+    for field in LIGHT_CURVE_FIELDS:
+        batch.update(collate_light_curve_field(samples, field))
     return batch
 
 

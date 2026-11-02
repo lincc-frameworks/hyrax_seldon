@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import torch
+from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS
 from hyrax_seldon.models.seldon import HyraxSeldon
 from hyrax_seldon.settings import SeldonSettings
 from seldon_fixtures import (
@@ -44,7 +45,7 @@ def test_light_curve_frame_removes_padding():
 
     frame = HyraxSeldon.light_curve_frame(collate_light_curves(light_curves))
 
-    assert list(frame.columns) == ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
+    assert list(frame.columns) == list(LIGHT_CURVE_FIELDS)
     for row, light_curve in enumerate(light_curves):
         for column, values in zip(frame.columns, light_curve, strict=True):
             np.testing.assert_array_equal(frame[column][row], values)

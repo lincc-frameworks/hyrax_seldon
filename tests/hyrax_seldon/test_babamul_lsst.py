@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 from babamul_fixtures import (
@@ -17,8 +19,9 @@ from hyrax_seldon.consumers.babamul_lsst import (
     BabamulLsstConsumer,
     merge_photometry,
 )
+from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS
 
-FIELDS = ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
+FIELDS = list(LIGHT_CURVE_FIELDS)
 
 
 class FakeMessage:
@@ -222,7 +225,7 @@ batch_flush_timeout = 0.0
 dataset_class = "test_babamul_lsst.FakeBabamulLsstConsumer"
 data_location = "kafka://localhost:9092"
 primary_id_field = "candid"
-fields = ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
+fields = {json.dumps(FIELDS)}
 
 [model]
 name = "hyrax_seldon.models.seldon.HyraxSeldon"

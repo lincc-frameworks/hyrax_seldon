@@ -1,12 +1,14 @@
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
-from hyrax_seldon.datasets.collate import collate_light_curve_field
+from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS, collate_light_curve_field
 from hyrax_seldon.datasets.elasticc_parquet import ElasticcParquetDataset
 from hyrax_seldon.settings import SeldonSettings
 from seldon_fixtures import prepare_inputs
 
-FIELDS = ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
+FIELDS = list(LIGHT_CURVE_FIELDS)
 
 
 @pytest.fixture
@@ -130,7 +132,7 @@ model_weights_file = "{weights}"
 dataset_class = "hyrax_seldon.datasets.elasticc_parquet.ElasticcParquetDataset"
 data_location = "{parquet}"
 primary_id_field = "SNID"
-fields = ["MJD", "FLUXCAL", "FLUXCALERR", "BAND", "PHOTFLAG"]
+fields = {json.dumps(FIELDS)}
 """
     )
     return config_file
