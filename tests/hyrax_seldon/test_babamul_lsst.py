@@ -204,7 +204,7 @@ def recorded():
     RecordingWriter.records.clear()
 
 
-def _write_config(tmp_path, weights, reconstruction_grid):
+def _write_config(tmp_path, weights):
     config_file = tmp_path / "alerts_config.toml"
     config_file.write_text(
         f"""
@@ -229,7 +229,6 @@ name = "hyrax_seldon.models.seldon.HyraxSeldon"
 
 [model.HyraxSeldon]
 seldon_config = "{weights.parent.parent / "hparams.yaml"}"
-reconstruction_grid = {str(reconstruction_grid).lower()}
 
 [infer_stream]
 model_weights_file = "{weights}"
@@ -266,8 +265,7 @@ EXPECTED_KEYS = {
 }
 
 
-@pytest.mark.parametrize("reconstruction_grid", [False, True])
-def test_process_alerts_end_to_end(tmp_path, seldon_checkpoint, recorded, reconstruction_grid):
+def test_process_alerts_end_to_end(tmp_path, seldon_checkpoint, recorded):
     """process_alerts streams Babamul LSST alerts through HyraxSeldon to the writers.
 
     Every alert gets its own result with every output key; each result's point count matches
@@ -275,21 +273,16 @@ def test_process_alerts_end_to_end(tmp_path, seldon_checkpoint, recorded, recons
     """
     from hyrax_alerts.process_alerts import process_alerts
 
-    process_alerts(config_filepath=str(_write_config(tmp_path, seldon_checkpoint, reconstruction_grid)))
+    process_alerts(config_filepath=str(_write_config(tmp_path, seldon_checkpoint)))
 
     alerts = {alert["candid"]: alert for alert in _alerts()}
     assert sorted(int(record["object_id"]) for record in recorded) == sorted(alerts)
 
-    expected = EXPECTED_KEYS | (
-        {"grid_time", "grid_reconstructed", "grid_error"} if reconstruction_grid else set()
-    )
     for record in recorded:
         result = record["__hyrax_result"]
-        assert set(result) == expected
+        assert set(result) == EXPECTED_KEYS
 
         n_points = len(merge_photometry(alerts[int(record["object_id"])])["jd"])
         assert int(np.asarray(result["pad_mask_full"]).sum()) == min(n_points, 512)
         assert np.asarray(result["reconstructed"]).shape == (512, 1)
         assert np.isfinite(np.asarray(result["z_mean"])).all()
-        if reconstruction_grid:
-            assert np.asarray(result["grid_reconstructed"]).shape == (6, 64)

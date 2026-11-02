@@ -110,7 +110,7 @@ def test_collate_padding_values():
     assert out["photflag_mask"].tolist() == [[True], [False]]
 
 
-def _write_infer_config(tmp_path, parquet, weights, reconstruction_grid=False):
+def _write_infer_config(tmp_path, parquet, weights):
     config_file = tmp_path / "infer_config.toml"
     config_file.write_text(
         f"""
@@ -125,7 +125,6 @@ name = "hyrax_seldon.models.seldon.HyraxSeldon"
 
 [model.HyraxSeldon]
 seldon_config = "{weights.parent.parent / "hparams.yaml"}"
-reconstruction_grid = {str(reconstruction_grid).lower()}
 
 [infer]
 model_weights_file = "{weights}"
@@ -159,28 +158,21 @@ EXPECTED_KEYS = {
     "pad_mask_full",
     "short_lightcurve",
 }
-GRID_KEYS = {"grid_time", "grid_reconstructed", "grid_error"}
 
 
-@pytest.mark.parametrize("reconstruction_grid", [False, True])
-def test_infer_end_to_end(tmp_path, elasticc_parquet, seldon_checkpoint, reconstruction_grid):
+def test_infer_end_to_end(tmp_path, elasticc_parquet, seldon_checkpoint):
     """h.infer() over ELAsTiCC parquet writes every output key, one row per object."""
     from hyrax import Hyrax
 
-    h = Hyrax(
-        config_file=_write_infer_config(tmp_path, elasticc_parquet, seldon_checkpoint, reconstruction_grid)
-    )
+    h = Hyrax(config_file=_write_infer_config(tmp_path, elasticc_parquet, seldon_checkpoint))
     results = h.infer()
 
     table = pd.read_parquet(elasticc_parquet)
     assert len(results) == len(table)
     assert sorted(results.ids()) == sorted(str(s) for s in table["SNID"])
-    expected = EXPECTED_KEYS | (GRID_KEYS if reconstruction_grid else set())
-    assert set(results.keys()) - {"object_id"} == expected
+    assert set(results.keys()) - {"object_id"} == EXPECTED_KEYS
 
     first = results[0]
     assert np.asarray(first["reconstructed"]).shape == (512, 1)
     assert np.asarray(first["z_mean"]).shape == (12,)
     assert np.isfinite(np.asarray(first["reconstructed"])).all()
-    if reconstruction_grid:
-        assert np.asarray(first["grid_reconstructed"]).shape == (6, 64)
