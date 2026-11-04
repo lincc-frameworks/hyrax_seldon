@@ -17,6 +17,7 @@ from hyrax_seldon.consumers.babamul_lsst import (
     DETECTION_PHOTFLAG,
     NJY_TO_FLUXCAL,
     BabamulLsstConsumer,
+    memoize_last_alert,
     merge_photometry,
 )
 from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS
@@ -129,6 +130,21 @@ def test_merge_photometry():
     np.testing.assert_array_equal(merged["flux"], [10.0, 1000.0, -30.0, 2000.0])
     np.testing.assert_array_equal(merged["flux_err"], [40.0, 50.0, 80.0, 60.0])
     assert merged["detected"].tolist() == [False, True, False, True]
+
+
+def test_memoize_last_alert():
+    """The result is reused for the same alert object and recomputed for any other."""
+    calls = []
+
+    @memoize_last_alert
+    def merge(alert):
+        calls.append(alert)
+        return {"n": len(calls)}
+
+    first, second = _small_alert(), _small_alert()
+    assert merge(first) is merge(first)
+    assert merge(second) is not merge(first)
+    assert [id(alert) for alert in calls] == [id(first), id(second), id(first)]
 
 
 def test_getters(consumer):
