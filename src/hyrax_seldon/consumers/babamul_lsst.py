@@ -6,6 +6,8 @@ include the alert's own) and ``fp_hists`` (forced photometry). Times are Julian 
 ``psfFlux`` / ``psfFluxErr`` are in nJy.
 """
 
+import functools
+
 import numpy as np
 from hyrax_alerts.consumers.babamul_consumer import BabamulConsumer
 
@@ -21,6 +23,26 @@ NJY_TO_FLUXCAL = 10 ** (-0.4 * (31.4 - 27.5))
 DETECTION_PHOTFLAG = 4096
 
 
+def memoize_last_alert(func):
+    """Cache ``func``'s result for the alert it was last called with, matched by identity.
+
+    Hyrax calls an alert's getters one after another, so one entry is enough for every getter
+    to share a single call. The cache holds a reference to that alert, so no other alert can
+    be given its ``id`` while it is cached.
+    """
+    last = None  # (alert, result)
+
+    @functools.wraps(func)
+    def wrapper(alert):
+        nonlocal last
+        if last is None or last[0] is not alert:
+            last = (alert, func(alert))
+        return last[1]
+
+    return wrapper
+
+
+@memoize_last_alert
 def merge_photometry(alert: dict) -> dict[str, np.ndarray]:
     """Merge an alert's detections and forced photometry into one light curve.
 
