@@ -38,12 +38,14 @@ def test_output_shapes_and_dtypes(seldon_config):
     assert {key: (value.shape, value.dtype) for key, value in out.items()} == expected
 
 
-def test_light_curve_frame_removes_padding():
+def test_light_curve_frame_removes_padding(seldon_config):
     """Each row holds its own points, unpadded, in SELDON's parquet columns."""
     rng = np.random.default_rng(3)
     light_curves = [random_light_curve(rng, 40), random_light_curve(rng, 90)]
 
-    frame = HyraxSeldon.light_curve_frame(collate_light_curves(light_curves))
+    frame = HyraxSeldon.light_curve_frame(
+        collate_light_curves(light_curves), seldon_config["model"]["HyraxSeldon"]
+    )
 
     assert list(frame.columns) == list(LIGHT_CURVE_FIELDS)
     for row, light_curve in enumerate(light_curves):
@@ -156,3 +158,32 @@ def test_data_group_required(seldon_config):
 
     for value in out.values():
         torch.from_numpy(value)
+
+
+def test_custom_field_names(seldon_config):
+    """Configured field names, masks included, are read and mapped to SELDON's parquet columns."""
+    # SELDON column -> the custom name the batch uses for it, and the config key naming that field.
+    custom = {
+        "MJD": ("time", "mjd_field_name"),
+        "FLUXCAL": ("flux", "flux_field_name"),
+        "FLUXCALERR": ("flux_err", "flux_err_field_name"),
+        "BAND": ("band", "band_field_name"),
+        "PHOTFLAG": ("flag", "phot_flag_field_name"),
+    }
+    rng = np.random.default_rng(12)
+    batch = collate_light_curves([random_light_curve(rng, 50)])
+    batch["FLUXCALERR_mask"][0, 5] = False
+
+    renamed = {}
+    for column, (name, _) in custom.items():
+        renamed[name] = batch[column]
+        renamed[f"{name}_mask"] = batch[f"{column}_mask"]
+
+    model_config = dict(seldon_config["model"]["HyraxSeldon"])
+    model_config.update({key: name for name, key in custom.values()})
+
+    frame = HyraxSeldon.light_curve_frame(renamed, model_config)
+
+    assert list(frame.columns) == list(LIGHT_CURVE_FIELDS)
+    # The masked point is dropped, so the custom "flux_err_mask" was honored.
+    assert len(frame["MJD"][0]) == 49
