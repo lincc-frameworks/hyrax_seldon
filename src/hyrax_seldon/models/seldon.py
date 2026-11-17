@@ -32,7 +32,6 @@ import torch.nn as nn
 from hyrax.models.model_registry import hyrax_model
 
 from hyrax_seldon import _seldon
-from hyrax_seldon.datasets.collate import LIGHT_CURVE_FIELDS
 from hyrax_seldon.settings import SeldonSettings
 
 logger = logging.getLogger(__name__)
@@ -156,23 +155,34 @@ class HyraxSeldon(nn.Module):
         pandas.DataFrame
             Per-point list columns ``MJD``, ``FLUXCAL``, ``FLUXCALERR``, ``BAND`` and ``PHOTFLAG``.
         """
-        missing = [name for name in LIGHT_CURVE_FIELDS if name not in data]
+        from hyrax import get_context
+
+        model_config = get_context()["config"]["model"]["HyraxSeldon"]
+        light_curve_fields = [
+            model_config["mjd_field_name"],
+            model_config["flux_field_name"],
+            model_config["flux_err_field_name"],
+            model_config["band_field_name"],
+            model_config["phot_flag_field_name"],
+        ]
+
+        missing = [name for name in light_curve_fields if name not in data]
         if missing:
             raise RuntimeError(
                 f"HyraxSeldon could not find the field(s) {missing} in the batch. Available fields: "
-                f"{sorted(data)}. List {list(LIGHT_CURVE_FIELDS)} in the data request's 'fields'."
+                f"{sorted(data)}. List {list(light_curve_fields)} in the data request's 'fields'."
             )
 
-        columns = {name: np.asarray(data[name]) for name in LIGHT_CURVE_FIELDS}
+        columns = {name: np.asarray(data[name]) for name in light_curve_fields}
         shapes = {values.shape for values in columns.values()}
-        if len(shapes) > 1 or columns["MJD"].ndim != 2:
+        if len(shapes) > 1 or columns[model_config["mjd_field_name"]].ndim != 2:
             raise RuntimeError(
                 "HyraxSeldon expects every light-curve field to collate to the same (batch, length) "
                 f"shape, but got shapes {sorted(shapes)}."
             )
 
-        valid = np.ones(columns["MJD"].shape, dtype=bool)
-        for name in LIGHT_CURVE_FIELDS:
+        valid = np.ones(columns[model_config["mjd_field_name"]].shape, dtype=bool)
+        for name in light_curve_fields:
             mask = data.get(f"{name}_mask")
             if mask is not None:
                 valid &= np.asarray(mask).astype(bool)
