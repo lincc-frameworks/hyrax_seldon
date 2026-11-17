@@ -8,6 +8,12 @@ seldon_config = false
 # Keep the torch compile() calls SELDON makes in its model constructors.
 compile = false
 
+mjd_field_name = "MJD"
+flux_field_name = "FLUXCAL"
+flux_err_field_name = "FLUXCALERR"
+band_field_name = "BAND"
+phot_flag_field_name = "PHOTFLAG"
+
 # hyrax_alerts settings that BabamulLsstConsumer and process_alerts read. hyrax_alerts' own
 # defaults are only merged when a config names one of its classes, so they are repeated here.
 [hyrax_alerts.consumer]
