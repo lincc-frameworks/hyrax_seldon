@@ -1,5 +1,7 @@
 # ruff: noqa: N802, N806
 
+from random import sample
+
 import numpy as np
 
 from hyrax.datasets.collate_utils import collate_as_1d_light_curve
@@ -29,17 +31,11 @@ class LasairSeldonConsumer(LasairLiteConsumer):
         """
         super().__init__(config=config, data_location=data_location)
 
-    def get_photFlag(self, sample):
+    def get_diaForcedSource_photFlag(self, sample):
         """Get the photometric flag from a sample."""
-        photFlag = np.array([], dtype=np.float32)
-        alert = sample.get("alert")
-        if alert is not None:
-            diaForcedSourcesList = alert.get("diaForcedSourcesList")
-            if diaForcedSourcesList and len(diaForcedSourcesList) > 0:
-                photFlag = np.array([s["photFlag"] for s in diaForcedSourcesList], dtype=np.float32)
-        return photFlag
+        return self._get_light_curve_values(sample, "diaForcedSourcesList", "photFlag", np.float32)
 
-    def collate_photFlag(self, samples):
+    def collate_diaForcedSource_photFlag(self, samples):
         """Collate photometric flag data from a list of samples. Returns a dictionary with
         the collated photFlag and a corresponding photFlag_mask indicating valid values."""
-        return collate_as_1d_light_curve(samples, "photFlag")
+        return collate_as_1d_light_curve(samples, "diaForcedSource_photFlag")
