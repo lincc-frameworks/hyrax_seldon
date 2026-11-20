@@ -1,0 +1,624 @@
+transmission_filters:
+  u: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_u.dat
+  g: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_g.dat
+  r: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_r.dat
+  i: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_i.dat
+  z: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_z.dat
+  'y': /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_y.dat
+  F470N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f470n.dat
+  F300M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f300m.dat
+  F164N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f164n.dat
+  F200W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f200w.dat
+  F466N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f466n.dat
+  F070W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f070w.dat
+  F323N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f323n.dat
+  F335M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f335m.dat
+  F360M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f360m.dat
+  F140M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f140m.dat
+  F250M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f250m.dat
+  F150W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w2.dat
+  F182M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f182m.dat
+  F356W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f356w.dat
+  F410M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f410m.dat
+  F150W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w.dat
+  F277W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f277w.dat
+  F430M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f430m.dat
+  F090W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f090w.dat
+  F210M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f210m.dat
+  F460M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f460m.dat
+  F480M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f480m.dat
+  F187N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f187n.dat
+  F115W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f115w.dat
+  F212N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f212n.dat
+  F444W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f444w.dat
+  F405N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f405n.dat
+  F322W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f322w2.dat
+  F162M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f162m.dat
+  F062: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F062.dat
+  F087: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F087.dat
+  F106: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F106.dat
+  F129: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F129.dat
+  F146: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F146.dat
+  F158: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F158.dat
+  F184: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F184.dat
+  F213: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F213.dat
+dataset:
+  name: FlexibleLightCurveDataLoader
+  config:
+    lightcurve_path:
+    - /projects/ncsa/caps/skai/data/ELAsTiCC/complete.parquet
+    - /projects/ncsa/caps/skai/data/roman.parquet
+    fine_tune_data: null
+    zero_point_flux: 1
+    class_mapping:
+      snia-cosmo-norm: SNIa
+      snia: SNIa
+      snia-cosmo-91t: SNIa
+      snia-pec-03fg: SNIa
+      snia-cosmo-norm/99aa: SNIa
+      snia-cosmo-norm/04gs: SNIa
+      snia-pec-91bg: SNIa
+      snia-cosmo-99aa/91t: SNIa
+      snia-cosmo-99aa: SNIa
+      snia-pec-02es: SNIa
+      snia-pec-iax: SNIax
+      snia-pec-csm: SNIa
+      snia-pec-00cx: SNIa
+      snia-pec-19yvq: SNIa
+      snia-91bg/86G: SNIa
+      snia-pec-18byg: SNIa
+      SNIa: SNIa
+      SN Ibn: SNIb/c
+      SN Ic: SNIb/c
+      NA: Unknown
+      SN Ia-norm: SNIa
+      SN Ia-91T-like: SNIa
+      SN II: SNII
+      TDE: TDE
+      SN IIb: SNIIb
+      SN IIn: SNIIn
+      SN Ia-CSM: SNIa
+      SN Ia-SC: SNIa
+      SN: SN
+      LBV: LBV
+      SN Ib: SNIb/c
+      Other: Unknown
+      SN Ic-BL: SNIb/c
+      LRN: LRN
+      SN Iax: SNIax
+      SN Ia-91bg-like: SNIa
+      SLSN-II: SLSN
+      SLSN-I: SLSN
+      SN Ib-pec: SNIb/c
+      Unknown: Unknown
+      CCSN: CCSN
+      SNIa-91bg: SNIa
+      SNIax: SNIax
+      ILOT: ILOT
+      KN: KN
+      PISN: PISN
+      AGN: AGN
+      Fixedmag: Unknown
+      SNII-NMF: SNII
+      SNIc-Templates: SNIb/c
+      CART: CART
+      EB: EB
+      SNIc+HostXT_V19: SNIb/c
+      d-Sct: Delta Scuti
+      SNIb-Templates: SNIb/c
+      SNIIb+HostXT_V19: SNIIb
+      SNIcBL+HostXT_V19: SNIb/c
+      CLAGN: AGN
+      Cepheid: Cepheid
+      SLSN-I+host: SLSN
+      SNIIn-MOSFIT: SNIIn
+      SNII+HostXT_V19: SNII
+      SLSN-I_no_host: SLSN
+      SNII-Templates: SNII
+      SNIa-SALT3: SNIa
+      KN_K17: KN
+      SNIIn+HostXT_V19: SNIIn
+      dwarf-nova: Dwarf Novae
+      uLens-Binary: uLens
+      RRL: RR Lyrae
+      Mdwarf-flare: M-dwarf Flare
+      KN_B19: KN
+      uLens-Single-GenLens: uLens
+      SNIb+HostXT_V19: SNIb/c
+      uLens-Single_PyLIMA: uLens
+      SNIb/c: SNIb/c
+      SNII: SNII
+      SLSN: SLSN
+      Delta Scuti: Delta Scuti
+      SNIIb: SNIIb
+      SNIIn: SNIIn
+      Dwarf Novae: Dwarf Novae
+      uLens: uLens
+      RR Lyrae: RR Lyrae
+      M-dwarf Flare: M-dwarf Flare
+      SN Ia: SNIa
+      SN Icn: SNIb/c
+      unknown: unknown
+    class_filter:
+    - SNIa
+    - SNII
+    - SNIIb
+    - SNIIn
+    - SNIb/c
+    - SNIax
+    - SLSN
+    - KN
+    - ILOT
+    - PISN
+    flux_normalization: minmax
+    time_normalization: std
+    min_points: 32
+    max_points: 256
+    max_length: 256
+    augmentations:
+    - FullSample
+    - CutOffSample
+    batch_size: 2048
+    num_workers: 16
+    mode: parquet
+    t_max: 20.0
+    resample: true
+    include_non_detections: true
+    include_meta_data: true
+    t_offset: 0.0
+    group_classes: true
+    zero_non_detections: false
+    pin_memory: true
+    force_zero_non_detections: false
+    band_index_map:
+      name: BandIndexMap
+      config:
+        mode: files
+        filedict:
+          u: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_u.dat
+          g: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_g.dat
+          r: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_r.dat
+          i: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_i.dat
+          z: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_z.dat
+          'y': /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_y.dat
+          F470N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f470n.dat
+          F300M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f300m.dat
+          F164N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f164n.dat
+          F200W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f200w.dat
+          F466N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f466n.dat
+          F070W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f070w.dat
+          F323N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f323n.dat
+          F335M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f335m.dat
+          F360M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f360m.dat
+          F140M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f140m.dat
+          F250M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f250m.dat
+          F150W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w2.dat
+          F182M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f182m.dat
+          F356W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f356w.dat
+          F410M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f410m.dat
+          F150W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w.dat
+          F277W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f277w.dat
+          F430M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f430m.dat
+          F090W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f090w.dat
+          F210M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f210m.dat
+          F460M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f460m.dat
+          F480M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f480m.dat
+          F187N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f187n.dat
+          F115W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f115w.dat
+          F212N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f212n.dat
+          F444W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f444w.dat
+          F405N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f405n.dat
+          F322W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f322w2.dat
+          F162M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f162m.dat
+          F062: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F062.dat
+          F087: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F087.dat
+          F106: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F106.dat
+          F129: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F129.dat
+          F146: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F146.dat
+          F158: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F158.dat
+          F184: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F184.dat
+          F213: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F213.dat
+    flux_stats:
+      min: -447.000732421875
+      max: 233063.375
+      mean: 86.74453735351562
+      std: 635.3709716796875
+      t_max: 20.0
+    band_weights:
+      0: 2.1966259534280916
+      1: .inf
+      2: 1.8584562685442023
+      3: .inf
+      4: 1.1537804970124397
+      5: .inf
+      6: 1.166255375992998
+      7: .inf
+      8: .inf
+      9: .inf
+      10: .inf
+      11: 3.1947961026294696
+      12: .inf
+      13: .inf
+      14: .inf
+      15: 3.532688286054603
+      16: .inf
+      17: .inf
+      18: .inf
+      19: .inf
+      20: .inf
+      21: .inf
+      22: .inf
+      23: .inf
+      24: .inf
+      25: .inf
+      26: .inf
+      27: .inf
+      28: .inf
+      29: .inf
+      30: .inf
+      31: .inf
+      32: .inf
+      33: .inf
+      34: .inf
+      35: .inf
+      36: .inf
+      37: 1.3483733818488302
+      38: 0.5060284877381466
+      39: 0.5261836163226208
+      40: 1.89837838520194
+      41: 0.5520528392609472
+      42: 0.5780468568728911
+    class_map:
+      ILOT: 0
+      PISN: 1
+      SLSN: 2
+      SNII: 3
+      SNIIb: 4
+      SNIIn: 5
+      SNIa: 6
+      SNIax: 7
+      SNIb/c: 8
+global_params:
+  hidden_size: 256
+  latent_dim: 6
+  dropout: 0.0
+  sed_size: 2048
+  ode_size: 256
+model_params:
+  name: SELDONEnergyClassifierDictModel
+  config:
+    variational: true
+    num_classes: 10
+    from_memory: false
+    class_conditional_decoder: false
+    class_embedding:
+      name: Embedding
+      config:
+        num_embeddings: 10
+        embedding_dim: 32
+    energy_model:
+      name: EnergyBasedModel
+      config:
+        model:
+          name: ResidualNetwork
+          config:
+            n_features: 38
+            n_output: 1
+            n_hidden: 256
+            n_layers: 2
+            activation: GELU
+            dropout: 0.0
+            norm: true
+        sampler:
+          name: BlockedGibbsEmbeddingSampler
+          config:
+            model: null
+            MALA: false
+            latent_dim: 6
+            num_classes: 10
+            sample_size: 2048
+    distribution_model:
+      name: NormalDistributionModel
+      config:
+        input_dim: 256
+        output_dim: 6
+        epsilon: 0.01
+    uq_net:
+      name: ResidualNetwork
+      config:
+        n_features: 2056
+        n_output: 1
+        n_hidden: 256
+        n_layers: 2
+        activation: GELU
+        dropout: 0.0
+        norm: true
+    encoder:
+      name: RecurrentODEEncoderV2
+      config:
+        embedder:
+          name: ModularLightCurveEmbedding
+          config:
+            output_dim: 256
+            mode: add
+            flux_embedding:
+              name: FPEmbedding
+              config:
+                nvector: 1
+                nemb: 256
+                dropout: 0.0
+                normalize: true
+            flux_error_embedding:
+              name: FPEmbedding
+              config:
+                nvector: 1
+                nemb: 256
+                dropout: 0.0
+                normalize: true
+            meta_data_embedding:
+              name: Embedding
+              config:
+                num_embeddings: 2
+                embedding_dim: 256
+                scale_grad_by_freq: false
+            band_embedding:
+              name: AttentiveBandPassEmbedding
+              config:
+                bandpass:
+                  name: BandIndexMap
+                  config:
+                    mode: files
+                    filedict:
+                      u: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_u.dat
+                      g: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_g.dat
+                      r: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_r.dat
+                      i: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_i.dat
+                      z: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_z.dat
+                      'y': /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_y.dat
+                      F470N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f470n.dat
+                      F300M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f300m.dat
+                      F164N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f164n.dat
+                      F200W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f200w.dat
+                      F466N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f466n.dat
+                      F070W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f070w.dat
+                      F323N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f323n.dat
+                      F335M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f335m.dat
+                      F360M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f360m.dat
+                      F140M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f140m.dat
+                      F250M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f250m.dat
+                      F150W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w2.dat
+                      F182M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f182m.dat
+                      F356W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f356w.dat
+                      F410M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f410m.dat
+                      F150W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w.dat
+                      F277W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f277w.dat
+                      F430M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f430m.dat
+                      F090W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f090w.dat
+                      F210M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f210m.dat
+                      F460M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f460m.dat
+                      F480M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f480m.dat
+                      F187N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f187n.dat
+                      F115W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f115w.dat
+                      F212N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f212n.dat
+                      F444W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f444w.dat
+                      F405N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f405n.dat
+                      F322W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f322w2.dat
+                      F162M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f162m.dat
+                      F062: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F062.dat
+                      F087: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F087.dat
+                      F106: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F106.dat
+                      F129: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F129.dat
+                      F146: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F146.dat
+                      F158: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F158.dat
+                      F184: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F184.dat
+                      F213: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F213.dat
+                output_dim: 256
+                dropout: 0.0
+                max_norm: true
+                embedding_dim: 2048
+                embed_dim: 64
+                num_heads: 1
+                lambda_min: 0.1
+                lambda_max: 10.0
+            aggregator_module:
+              name: ResidualNetwork
+              config:
+                n_features: 256
+                n_output: 256
+                n_hidden: 256
+                n_layers: 1
+                dropout: 0.0
+                activation: GELU
+                n_heads: 1
+                norm: true
+                residual_input: true
+        rnn:
+          name: RNNODEEncoderV2
+          config:
+            use_class_token: false
+            rnn_ode_cell:
+              name: RNNODECell
+              config:
+                rnn_cell:
+                  name: LNGRUCell
+                  config:
+                    input_size: 256
+                    hidden_size: 256
+                ode_solver:
+                  name: ODESolver
+                  config:
+                    use_fixed_solver: true
+                    fixed_solver_steps: 1
+                    ode_net:
+                      name: ODEModelWrapper
+                      config:
+                        autonomous: true
+                        model:
+                          name: ResidualNetwork
+                          config:
+                            n_features: 256
+                            n_output: 256
+                            n_hidden: 256
+                            n_layers: 1
+                            dropout: 0.0
+                            activation: GELU
+                            n_heads: 1
+                            norm: true
+                            residual_input: false
+        aggregator: null
+        output_network:
+          name: ResidualNetwork
+          config:
+            n_features: 256
+            n_output: 256
+            n_hidden: 256
+            n_layers: 2
+            activation: GELU
+            dropout: 0.0
+            norm: true
+            norm_first: true
+            residual_input: true
+        t_max: 1.0
+        N_points: 50
+        autoscale_input_time: false
+        autoscale_output_time: false
+    decoder:
+      name: SpectrumBasisDecoder
+      config:
+        latent_dim: 6
+        hidden: 256
+        BAND_EMB_DIM: 2048
+        num_basis: 8
+        dropout: 0.0
+        band_dropout: 0.0
+        activation: GELU
+        nlayers: 2
+        parameter_n_layers: 2
+        residual_parameter_input: true
+        logscale_output: true
+        norm: true
+        norm_first: true
+        rescale_decoupled_network: false
+        full_spectrum: false
+        weight_bases: false
+        separable: true
+        norm_params: true
+        log_amp_center: 6.0
+        double_sigmoid: false
+        scale_band_embedding: false
+        softmax_time_evolution: false
+        sine_transform: true
+        use_logspace: false
+        norm_band_embedding: false
+        embedding_expansion: 8
+        time_impulse_first: false
+        embed_freqs: true
+        use_modular_basis: true
+        bandpass_embedding:
+          name: BandPassEmbedding
+          config:
+            bandpass:
+              name: BandIndexMap
+              config:
+                mode: files
+                filedict:
+                  u: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_u.dat
+                  g: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_g.dat
+                  r: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_r.dat
+                  i: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_i.dat
+                  z: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_z.dat
+                  'y': /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/total_y.dat
+                  F470N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f470n.dat
+                  F300M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f300m.dat
+                  F164N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f164n.dat
+                  F200W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f200w.dat
+                  F466N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f466n.dat
+                  F070W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f070w.dat
+                  F323N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f323n.dat
+                  F335M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f335m.dat
+                  F360M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f360m.dat
+                  F140M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f140m.dat
+                  F250M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f250m.dat
+                  F150W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w2.dat
+                  F182M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f182m.dat
+                  F356W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f356w.dat
+                  F410M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f410m.dat
+                  F150W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f150w.dat
+                  F277W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f277w.dat
+                  F430M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f430m.dat
+                  F090W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f090w.dat
+                  F210M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f210m.dat
+                  F460M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f460m.dat
+                  F480M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f480m.dat
+                  F187N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f187n.dat
+                  F115W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f115w.dat
+                  F212N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f212n.dat
+                  F444W: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f444w.dat
+                  F405N: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f405n.dat
+                  F322W2: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f322w2.dat
+                  F162M: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/jwst_nircam_f162m.dat
+                  F062: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F062.dat
+                  F087: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F087.dat
+                  F106: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F106.dat
+                  F129: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F129.dat
+                  F146: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F146.dat
+                  F158: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F158.dat
+                  F184: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F184.dat
+                  F213: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/TAE/data/Roman_WFI.F213.dat
+            embedding_dim: 2048
+            lambda_min: 0.1
+            lambda_max: 10.0
+            lambda_unit: microns
+            logscale: true
+exp_params:
+  name: SELDONEnergyClassifierExperiment3
+  config:
+    kl_weight: 0.005
+    weight_bands: true
+    weight_classes: true
+    inverse_transform: true
+    energy_weight: 0.005
+    scale_delta_by: detection_flag
+    inverse_scale_reconstruction: false
+    fit_redshift: true
+    energy_norm: 0.01
+    temperature: 1.0
+    step_size: 0.0001
+    loss:
+      name: FlexibleGaussianLoss
+      config:
+        eps: 0.0001
+    params:
+      dataset: LightCurveDataLoader
+      figures: []
+      optimizer:
+        name: Adam
+        config:
+          LR: 0.0003
+          weight_decay: 0.0
+          scheduler:
+            name: CosineAnnealingScheduler
+            config:
+              T_max: 80000
+              eta_min: 1.0e-08
+    metrics:
+      name: Metrics
+      config:
+        metrics:
+        - fractional_errors
+        - z_scores
+trainer_params:
+  max_epochs: 200000
+  accelerator: auto
+  devices: 1
+  gradient_clip_val: 5.0
+  accumulate_grad_batches: 1
+  num_nodes: 1
+  strategy: ddp
+  log_every_n_steps: 25
+  overfit_batches: 0
+  check_val_every_n_epoch: 1
+logging_params:
+  manual_seed: 42
+  save_dir: /projects/ncsa/caps/skai/software/Transient-Foundation-Model/logs/
+  name: SELDON_2.0_S_E_UQ_C_with_transmission_delta_refactored_l6_b2048_e256_o256_d256_roman_elasticc
