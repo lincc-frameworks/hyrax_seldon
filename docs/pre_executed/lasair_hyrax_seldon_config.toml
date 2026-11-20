@@ -1,0 +1,45 @@
+#############################
+# Hyrax-alerts configurations
+#############################
+[hyrax_alerts.consumer]
+pre_process = "hyrax_seldon.alert_processors.lasair_preprocess.preprocess"
+pre_filter = "hyrax_seldon.alert_processors.lasair_preprocess.prefilter"
+alert_limit = 500
+
+# With no output_location, this writer writes to ./results/<run_dir>/to_disk_0/.
+# Set output_location to send it somewhere else; it then gets its own
+# <timestamp>-hyrax_alerts-<rand> subdirectory inside that location.
+[hyrax_alerts.writers.to_disk_0]
+writer_class = "HyraxAlertsDiskWriter"
+post_process = "hyrax_alerts.example_functions.example_post_process"
+post_filter = "hyrax_alerts.example_functions.example_post_filter"
+
+
+#####################
+# Hyrax configuration
+#####################
+[data_request.infer_stream.data]
+dataset_class = "hyrax_seldon.consumers.lasair_seldon_consumer.LasairSeldonConsumer"
+data_location = "kafka://lasair-lsst-kafka.lsst.ac.uk:9092/lasair_201DrewsLSSTvariables/group_0"
+primary_id_field = "diaObjectId"
+fields = [
+    "diaForcedSource_psfFlux",
+    "diaForcedSource_psfFluxErr",
+    "diaForcedSource_midpointMjdTai",
+    "diaForcedSource_band",
+    "diaForcedSource_photFlag"]
+
+[model]
+name = "hyrax_seldon.models.seldon.HyraxSeldon"
+
+[model.HyraxSeldon]
+seldon_config = "./hparams.yaml"
+band_field_name = "diaForcedSource_band"
+mjd_field_name = "diaForcedSource_midpointMjdTai"
+flux_field_name = "diaForcedSource_psfFlux"
+flux_err_field_name = "diaForcedSource_psfFluxErr"
+phot_flag_field_name = "diaForcedSource_photFlag"
+
+[infer_stream]
+model_weights_file = "./epoch=1086-val_loss=1.18.ckpt"
+save_model_output = true
