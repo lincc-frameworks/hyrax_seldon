@@ -1,14 +1,9 @@
 # ruff: noqa: N802, N806
 
-from random import sample
-
 import numpy as np
-
 from hyrax.datasets.collate_utils import collate_as_1d_light_curve
-
-from hyrax_alerts.logging_utils import get_logger
-
 from hyrax_alerts.consumers.lasair_lite_lc_consumer import LasairLiteConsumer
+from hyrax_alerts.logging_utils import get_logger
 
 logger = get_logger(__name__)
 

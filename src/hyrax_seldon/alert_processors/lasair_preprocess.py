@@ -17,9 +17,10 @@ def prefilter(self, batch):
     min_observations = 32
 
     return [
-        alert for alert in batch
+        alert
+        for alert in batch
         if alert.get("alert") is not None
-        and len(alert["alert"].get('diaForcedSourcesList', [])) >= min_observations
+        and len(alert["alert"].get("diaForcedSourcesList", [])) >= min_observations
     ]
 
 
