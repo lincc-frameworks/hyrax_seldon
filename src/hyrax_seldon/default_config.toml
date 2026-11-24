@@ -5,8 +5,19 @@
 # class map. REQUIRED.
 seldon_config = false
 
-# Keep the torch compile() calls SELDON makes in its model constructors.
-compile = false
+# Keep the torch compile() calls SELDON makes in its model constructors, so SELDON runs as
+# compiled code (about twice as fast on a GPU) rather than eagerly.
+#
+# Compiling costs time up front, in the first batch of each run: about a minute and a half on
+# an NCSA DeltaAI GH200 with an empty compile cache (SELDON asks torch to autotune its kernels),
+# and well under a minute once torch's compile cache holds this model's kernels. A batch of a
+# new size compiles again, so a run whose last batch is smaller than batch_size pays this
+# again at its end, with an empty cache several minutes. The cache is kept between runs in
+# TORCHINDUCTOR_CACHE_DIR (by default under /tmp); point it somewhere persistent to reuse it
+# across jobs. Set false for small runs, where compiling takes longer than it saves.
+#
+# Compiling needs a C++ compiler: torch uses $CXX, or g++ if CXX is unset.
+compile = true
 
 mjd_field_name = "MJD"
 flux_field_name = "FLUXCAL"
