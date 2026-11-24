@@ -1,3 +1,11 @@
+[model]
+# Run HyraxSeldon.prepare_inputs (SELDON's preprocessing) in the data loader's worker
+# processes, alongside collation, rather than in the main process between GPU batches.
+# Preprocessing then overlaps with SELDON running on the GPU; on full ELAsTiCC on a DeltaAI
+# GH200 with 8 workers this takes inference from 522 s to 338 s. It needs
+# [data_loader].num_workers > 0 to help.
+parallel_prepare_inputs = true
+
 [model.HyraxSeldon]
 # Path to a SELDON run config: the hparams.yaml of a SELDON training run, or the
 # seldon_config.yaml that HyraxSeldon saves next to its weights.

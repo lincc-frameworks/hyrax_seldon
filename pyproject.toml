@@ -18,8 +18,9 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.12"
 dependencies = [
-    # HyraxSeldon.prepare_inputs returns a dict, which needs hyrax 0.13.1 or later.
-    "hyrax>=0.13.1",
+    # Hyrax's [model].parallel_prepare_inputs, which hyrax_seldon turns on, is not in a hyrax
+    # release yet: it is on hyrax's mtauraso-parallel-prepare-inputs branch.
+    "hyrax @ git+https://github.com/lincc-frameworks/hyrax@mtauraso-parallel-prepare-inputs",
     # hyrax_alerts is not on PyPI.
     "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@main",
     "fastavro",

@@ -317,6 +317,17 @@ def test_compile_is_the_default():
         assert tomllib.load(f)["model"]["HyraxSeldon"]["compile"] is True
 
 
+def test_parallel_prepare_inputs_is_the_default():
+    """hyrax_seldon's default config runs prepare_inputs in the data loader's workers."""
+    import tomllib
+    from pathlib import Path
+
+    import hyrax_seldon
+
+    with open(Path(hyrax_seldon.__file__).parent / "default_config.toml", "rb") as f:
+        assert tomllib.load(f)["model"]["parallel_prepare_inputs"] is True
+
+
 def test_compile_neutralized_unless_requested(hyrax_config):
     """SELDON's constructor compile() calls are undone when compile = false."""
     model = HyraxSeldon(config=hyrax_config)
