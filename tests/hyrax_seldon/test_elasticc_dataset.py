@@ -124,6 +124,8 @@ name = "hyrax_seldon.models.seldon.HyraxSeldon"
 
 [model.HyraxSeldon]
 seldon_config = "{weights.parent.parent / "hparams.yaml"}"
+# Run SELDON eagerly; compiling it would only make the test slow.
+compile = false
 
 [infer]
 model_weights_file = "{weights}"

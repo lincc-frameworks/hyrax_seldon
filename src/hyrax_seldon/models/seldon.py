@@ -53,6 +53,29 @@ MODEL_INPUTS = (
     "n_detections",
 )
 
+#: Added to errors raised while torch compiles SELDON (``[model.HyraxSeldon].compile = true``).
+COMPILE_ERROR_HINT = """\
+HyraxSeldon runs SELDON compiled with torch.compile ([model.HyraxSeldon].compile = true, the \
+default), and compiling it failed. Try this to fix:
+  - A C++ compile error (CppCompileError, e.g. "undefined reference to `main'"): torch compiles \
+with the C++ compiler named by $CXX. Point it at a working one before starting Python, e.g. \
+`export CXX=g++`. On NCSA DeltaAI and other Cray systems CXX is set to the Cray CC wrapper, \
+which torch cannot use.
+  - "Guard failed on the same frame it was created": run the model under torch.no_grad() \
+rather than torch.inference_mode().
+  - Otherwise, or to run without compiling: set [model.HyraxSeldon].compile = false. SELDON \
+then runs eagerly, about half as fast on a GPU."""
+
+
+def _is_compile_error(err: BaseException) -> bool:
+    """Whether ``err`` came from torch compiling the model rather than from running it."""
+    from torch._dynamo.exc import TorchDynamoException
+
+    if isinstance(err, TorchDynamoException):  # includes Inductor's errors (InductorError)
+        return True
+    # Dynamo reports this compile/inference_mode clash as a plain AssertionError.
+    return isinstance(err, AssertionError) and "Guard failed" in str(err)
+
 
 @hyrax_model
 class HyraxSeldon(nn.Module):
@@ -80,7 +103,12 @@ class HyraxSeldon(nn.Module):
 
     def forward(self, x, t, band_idx_part, band_idx_full, mask=None):
         """Run SELDON's ``forward()``; see :meth:`prepare_inputs` for inputs."""
-        return self.model(x, t, band_idx_part, band_idx_full, mask=mask)
+        try:
+            return self.model(x, t, band_idx_part, band_idx_full, mask=mask)
+        except Exception as err:
+            if self.settings.compile and _is_compile_error(err):
+                err.add_note(COMPILE_ERROR_HINT)
+            raise
 
     def train_batch(self, batch):
         """Training is not supported yet.

@@ -33,7 +33,10 @@ def run_config_path(seldon_run_dir):
 def model_config():
     """The [model.HyraxSeldon] defaults from hyrax_seldon's default_config.toml."""
     with open(DEFAULT_CONFIG, "rb") as f:
-        return tomllib.load(f)["model"]["HyraxSeldon"]
+        model_config = tomllib.load(f)["model"]["HyraxSeldon"]
+    # The tests run SELDON eagerly on the CPU; compiling it would only make them slow.
+    model_config["compile"] = False
+    return model_config
 
 
 @pytest.fixture
@@ -57,6 +60,8 @@ def _hyrax_config(run_config_path):
     h = Hyrax(setup_logging=False)
     h.set_config("model.name", "hyrax_seldon.models.seldon.HyraxSeldon")
     h.set_config("model.HyraxSeldon.seldon_config", str(run_config_path))
+    # The tests run SELDON eagerly on the CPU; compiling it would only make them slow.
+    h.set_config("model.HyraxSeldon.compile", False)
     return h.config
 
 

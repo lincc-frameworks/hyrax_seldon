@@ -306,11 +306,72 @@ def test_prepare_inputs_uses_run_context(hyrax_config):
     assert prepared["x_input"].shape == (1, 64, 4)
 
 
+def test_compile_is_the_default():
+    """hyrax_seldon's default config keeps SELDON's compile() calls (the test fixtures turn it off)."""
+    import tomllib
+    from pathlib import Path
+
+    import hyrax_seldon
+
+    with open(Path(hyrax_seldon.__file__).parent / "default_config.toml", "rb") as f:
+        assert tomllib.load(f)["model"]["HyraxSeldon"]["compile"] is True
+
+
 def test_compile_neutralized_unless_requested(hyrax_config):
-    """SELDON's constructor compile() calls are undone unless compile = true."""
+    """SELDON's constructor compile() calls are undone when compile = false."""
     model = HyraxSeldon(config=hyrax_config)
     assert all(module._compiled_call_impl is None for module in model.modules())
 
     hyrax_config["model"]["HyraxSeldon"]["compile"] = True
     compiled = HyraxSeldon(config=hyrax_config)
     assert any(module._compiled_call_impl is not None for module in compiled.modules())
+
+
+def _raise_on_forward(model, err):
+    def fail(*args, **kwargs):
+        raise err
+
+    model.model.forward = fail
+    model.model._compiled_call_impl = None
+
+
+@pytest.mark.parametrize(
+    "make_error",
+    [
+        lambda: __import__("torch._inductor.exc", fromlist=["InductorError"]).InductorError(
+            RuntimeError("C++ compile error"), None
+        ),
+        lambda: AssertionError("Guard failed on the same frame it was created. This is a bug"),
+    ],
+    ids=["inductor", "guard"],
+)
+def test_compile_errors_get_a_hint(hyrax_config, make_error):
+    """Errors from compiling SELDON keep their type and gain a note on how to fix them."""
+    from hyrax_seldon.models.seldon import COMPILE_ERROR_HINT
+
+    hyrax_config["model"]["HyraxSeldon"]["compile"] = True
+    model = HyraxSeldon(config=hyrax_config)
+    err = make_error()
+    _raise_on_forward(model, err)
+    with pytest.raises(type(err)) as raised:
+        model(None, None, None, None)
+    assert raised.value is err
+    assert COMPILE_ERROR_HINT in getattr(raised.value, "__notes__", [])
+    assert "export CXX=g++" in COMPILE_ERROR_HINT
+
+
+def test_other_errors_get_no_hint(hyrax_config):
+    """Errors unrelated to compiling, or raised with compile = false, are passed on unchanged."""
+    hyrax_config["model"]["HyraxSeldon"]["compile"] = True
+    model = HyraxSeldon(config=hyrax_config)
+    _raise_on_forward(model, ValueError("not a compile error"))
+    with pytest.raises(ValueError) as raised:
+        model(None, None, None, None)
+    assert not getattr(raised.value, "__notes__", [])
+
+    hyrax_config["model"]["HyraxSeldon"]["compile"] = False
+    eager = HyraxSeldon(config=hyrax_config)
+    _raise_on_forward(eager, AssertionError("Guard failed on the same frame it was created"))
+    with pytest.raises(AssertionError) as raised:
+        eager(None, None, None, None)
+    assert not getattr(raised.value, "__notes__", [])
