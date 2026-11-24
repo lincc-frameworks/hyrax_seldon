@@ -19,11 +19,10 @@ dynamic = ["version"]
 requires-python = ">=3.12"
 dependencies = [
     # Hyrax's [model].parallel_prepare_inputs, which hyrax_seldon turns on, is not in a hyrax
-    # release yet: it is on hyrax's mtauraso-parallel-prepare-inputs branch.
-    "hyrax @ git+https://github.com/lincc-frameworks/hyrax@mtauraso-parallel-prepare-inputs",
-    # hyrax_alerts is not on PyPI. process_alerts needs to turn off parallel_prepare_inputs, which
-    # is on hyrax_alerts' process-alerts-serial-prepare-inputs branch.
-    "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@process-alerts-serial-prepare-inputs",
+    # release yet: it is on hyrax's main branch.
+    "hyrax @ git+https://github.com/lincc-frameworks/hyrax@main",
+    # hyrax_alerts is not on PyPI.
+    "hyrax_alerts @ git+https://github.com/lincc-frameworks/hyrax_alerts@main",
     "fastavro",
     "lightning == 2.5.2",
     "numpy",
